@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 <script src="yedek.js"></script>
 <style>
   :root{
@@ -43,6 +44,26 @@
   .toolbar input, .toolbar select{padding:.6rem .8rem; border:1.5px solid var(--line); border-radius:6px; font-family:var(--sans); font-size:.88rem; background:#fff;}
   .toolbar input{flex:1; min-width:200px;}
   .toolbar input:focus, .toolbar select:focus{outline:none; border-color:var(--brass);}
+  .scan-btn{
+    background:var(--ink); color:var(--cream); border:none; border-radius:6px;
+    padding:0 .9rem; font-size:1rem; cursor:pointer; flex-shrink:0;
+  }
+  .scan-btn:hover{background:var(--brass-dim);}
+  .field-with-scan{display:flex; gap:.4rem;}
+  .field-with-scan input{flex:1;}
+
+  .scanner-overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,.75); display:none;
+    align-items:center; justify-content:center; z-index:60; flex-direction:column;
+  }
+  .scanner-overlay.show{display:flex;}
+  .scanner-box{background:#fff; border-radius:12px; padding:1.2rem; width:min(360px, 90vw);}
+  .scanner-box h3{font-size:1rem; margin-bottom:.8rem; color:var(--ink);}
+  #reader{width:100%; border-radius:8px; overflow:hidden;}
+  .scanner-close{
+    margin-top:1rem; width:100%; padding:.6rem; background:none; border:1.5px solid var(--line);
+    border-radius:6px; color:#6B655A; cursor:pointer; font-size:.85rem;
+  }
 
   .card{background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden;}
   table{width:100%; border-collapse:collapse;}
@@ -137,11 +158,15 @@
         <h1>Stok</h1>
         <p id="stokCount">Yükleniyor…</p>
       </div>
-      <button class="primary" id="newStokBtn">+ Yeni Ürün</button>
+      <div style="display:flex; gap:.7rem;">
+        <a href="etiketler.html" class="primary" style="background:var(--ink); color:var(--cream); text-decoration:none; display:inline-flex; align-items:center;">🏷️ Etiket Yazdır</a>
+        <button class="primary" id="newStokBtn">+ Yeni Ürün</button>
+      </div>
     </div>
 
     <div class="toolbar">
       <input type="text" id="searchInput" placeholder="Ürün adı, kod veya barkod ile ara…">
+      <button type="button" class="scan-btn" id="scanSearchBtn" title="Kamerayla Okut">📷 Okut</button>
       <select id="filterKritik">
         <option value="">Tüm ürünler</option>
         <option value="kritik">Sadece kritik stoktakiler</option>
@@ -182,7 +207,10 @@
       </div>
       <div class="field">
         <label for="barkod">Barkod</label>
-        <input type="text" id="barkod" placeholder="Boş bırakılabilir">
+        <div class="field-with-scan">
+          <input type="text" id="barkod" placeholder="Boş bırakılabilir">
+          <button type="button" class="scan-btn" id="scanBarkodBtn" title="Kamerayla Okut">📷</button>
+        </div>
       </div>
     </div>
 
@@ -265,6 +293,14 @@
   </form>
 </aside>
 
+<div class="scanner-overlay" id="scannerOverlay">
+  <div class="scanner-box">
+    <h3>📷 Barkod / Karekod Okutun</h3>
+    <div id="reader"></div>
+    <button type="button" class="scanner-close" id="scannerCloseBtn">İptal</button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -285,7 +321,7 @@
   let subeId = null;
 
   sb.auth.getSession().then(async ({data})=>{
-    if (!data.session){ window.location.href = 'login.html'; return; }
+    if (!data.session){ window.location.href = 'index.html'; return; }
     currentUserId = data.session.user.id;
     document.getElementById('userEmail').textContent = data.session.user.email;
 
@@ -300,7 +336,7 @@
 
   document.getElementById('logoutBtn').addEventListener('click', async ()=>{
     await sb.auth.signOut();
-    window.location.href = 'login.html';
+    window.location.href = 'index.html';
   });
 
   async function loadStok(){
@@ -376,6 +412,56 @@
   document.getElementById('searchInput').addEventListener('input', renderTable);
   document.getElementById('filterKritik').addEventListener('change', renderTable);
 
+  // ---- Kamera ile okuma ----
+  let html5QrCode = null;
+
+  function openScanner(onScan){
+    document.getElementById('scannerOverlay').classList.add('show');
+    html5QrCode = new Html5Qrcode("reader");
+    html5QrCode.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: 240 },
+      (decodedText)=>{
+        closeScanner();
+        onScan(decodedText);
+      },
+      ()=>{ /* karede kod bulunamadı, sessizce devam */ }
+    ).catch(err=>{
+      showToast('Kamera açılamadı: ' + err);
+      closeScanner();
+    });
+  }
+
+  function closeScanner(){
+    document.getElementById('scannerOverlay').classList.remove('show');
+    if (html5QrCode){
+      html5QrCode.stop().then(()=> html5QrCode.clear()).catch(()=>{});
+      html5QrCode = null;
+    }
+  }
+  document.getElementById('scannerCloseBtn').addEventListener('click', closeScanner);
+
+  document.getElementById('scanSearchBtn').addEventListener('click', ()=>{
+    openScanner((code)=>{
+      document.getElementById('searchInput').value = code;
+      renderTable();
+      const bulundu = allStok.some(s => s.barkod === code || s.kod === code);
+      if (!bulundu){
+        if (confirm(`"${code}" barkodlu ürün kayıtlı değil. Bu barkotla yeni ürün eklemek ister misiniz?`)){
+          openNewProductDrawer(code);
+        }
+      } else {
+        showToast('Ürün bulundu ve listelendi.');
+      }
+    });
+  });
+
+  document.getElementById('scanBarkodBtn').addEventListener('click', ()=>{
+    openScanner((code)=>{
+      document.getElementById('barkod').value = code;
+    });
+  });
+
   // ---- Drawer ----
   const overlay = document.getElementById('overlay');
   const drawer = document.getElementById('drawer');
@@ -398,10 +484,14 @@
     return 'STK-' + String((count || 0) + 1).padStart(4, '0');
   }
 
-  document.getElementById('newStokBtn').addEventListener('click', async ()=>{
+  document.getElementById('newStokBtn').addEventListener('click', ()=> openNewProductDrawer());
+
+  async function openNewProductDrawer(prefilledBarkod){
     editingId = null;
     document.getElementById('drawerTitle').textContent = 'Yeni Ürün';
-    document.getElementById('drawerSub').textContent = 'Yeni bir stok kartı oluşturun.';
+    document.getElementById('drawerSub').textContent = prefilledBarkod
+      ? 'Kamerayla okutulan barkod otomatik dolduruldu, diğer bilgileri girin.'
+      : 'Yeni bir stok kartı oluşturun.';
     document.getElementById('deleteBtn').style.display = 'none';
     document.getElementById('stockBox').style.display = 'none';
     document.getElementById('baslangicStokField').style.display = 'block';
@@ -409,8 +499,12 @@
     document.getElementById('kod').value = await nextSuggestedKod();
     document.getElementById('birim').value = 'Adet';
     document.getElementById('kdv_orani').value = 20;
+    if (prefilledBarkod){
+      document.getElementById('barkod').value = prefilledBarkod;
+    }
     openDrawer();
-  });
+    document.getElementById('ad').focus();
+  }
 
   function openEdit(id){
     const s = allStok.find(x=>x.id === id);
