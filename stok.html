@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ragbet Ticaret — Stok</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="yedek.js"></script>
+<style>
+  :root{
+    --ink:#1C1B19; --panel:#24221F; --cream:#F5F1E8; --cream-dim:#E8E2D3;
+    --brass:#C97C2E; --brass-dim:#9C611F; --muted:#A39B8B; --rust:#B5432E;
+    --green:#3F7D4E; --line:#DAD2C0; --mono:'JetBrains Mono', monospace; --sans:'Inter', sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{font-family:var(--sans); background:var(--cream); color:var(--ink); min-height:100vh;}
+
+  .topbar{
+    background:var(--ink); color:var(--cream); display:flex; align-items:center;
+    justify-content:space-between; padding:0 1.75rem; height:60px;
+  }
+  .topbar .brand{font-family:var(--mono); font-weight:700; font-size:1.05rem;}
+  .topbar .brand small{font-weight:400; font-size:.7rem; color:var(--brass); letter-spacing:.1em; text-transform:uppercase; margin-left:.5rem;}
+  .topbar nav{display:flex; align-items:center; gap:1.5rem;}
+  .topbar nav a{color:var(--muted); text-decoration:none; font-size:.85rem; font-weight:500;}
+  .topbar nav a.active{color:var(--cream); border-bottom:2px solid var(--brass); padding-bottom:4px;}
+  .topbar .user{display:flex; align-items:center; gap:.9rem;}
+  .topbar .user span{font-size:.8rem; color:var(--muted); font-family:var(--mono);}
+  .topbar button.logout{background:none; border:1px solid #45423C; color:var(--cream-dim); padding:.4rem .8rem; border-radius:5px; font-size:.78rem; cursor:pointer;}
+  .topbar button.logout:hover{border-color:var(--brass);}
+
+  main{max-width:1180px; margin:0 auto; padding:2rem 1.5rem 4rem;}
+  .page-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:1.4rem; flex-wrap:wrap; gap:1rem;}
+  .page-head h1{font-size:1.5rem; font-weight:600;}
+  .page-head p{font-size:.85rem; color:#6B655A; margin-top:.2rem;}
+  button.primary{background:var(--brass); color:var(--ink); border:none; padding:.65rem 1.1rem; border-radius:6px; font-weight:600; font-size:.9rem; cursor:pointer;}
+  button.primary:hover{background:var(--brass-dim); color:var(--cream);}
+
+  .toolbar{display:flex; gap:.7rem; margin-bottom:1.2rem; flex-wrap:wrap;}
+  .toolbar input, .toolbar select{padding:.6rem .8rem; border:1.5px solid var(--line); border-radius:6px; font-family:var(--sans); font-size:.88rem; background:#fff;}
+  .toolbar input{flex:1; min-width:200px;}
+  .toolbar input:focus, .toolbar select:focus{outline:none; border-color:var(--brass);}
+
+  .card{background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden;}
+  table{width:100%; border-collapse:collapse;}
+  thead th{text-align:left; font-size:.72rem; text-transform:uppercase; letter-spacing:.05em; color:#8A8272; padding:.8rem 1rem; background:var(--cream-dim); font-weight:600;}
+  tbody td{padding:.8rem 1rem; font-size:.87rem; border-top:1px solid #F0EBDF;}
+  tbody tr{cursor:pointer;}
+  tbody tr:hover{background:#FBF9F3;}
+  .kod-cell{font-family:var(--mono); font-size:.78rem; color:#8A8272;}
+  .empty-row td{text-align:center; color:#9A927F; padding:2.5rem 1rem;}
+
+  .stok-pill{display:inline-flex; align-items:center; gap:.35rem; padding:.22rem .6rem; border-radius:20px; font-size:.78rem; font-weight:600;}
+  .stok-ok{background:#E7F0E9; color:var(--green);}
+  .stok-kritik{background:#FBEAE6; color:var(--rust);}
+  .stok-kritik::before{content:"⚠"; font-size:.75rem;}
+
+  /* ---- drawer ---- */
+  .overlay{position:fixed; inset:0; background:rgba(28,27,25,.45); opacity:0; pointer-events:none; transition:opacity .18s ease; z-index:20;}
+  .overlay.show{opacity:1; pointer-events:auto;}
+  .drawer{position:fixed; top:0; right:0; height:100vh; width:min(440px, 92vw); background:var(--cream); box-shadow:-8px 0 24px rgba(0,0,0,.15); transform:translateX(100%); transition:transform .22s ease; z-index:21; overflow-y:auto; padding:1.75rem;}
+  .drawer.show{transform:translateX(0);}
+  .drawer h2{font-size:1.2rem; margin-bottom:.2rem;}
+  .drawer .drawer-sub{font-size:.8rem; color:#6B655A; margin-bottom:1.2rem;}
+  .field{margin-bottom:1rem;}
+  .field label{display:block; font-size:.72rem; font-weight:600; text-transform:uppercase; letter-spacing:.03em; color:#6B655A; margin-bottom:.35rem;}
+  .field input, .field select{width:100%; padding:.65rem .8rem; border:1.5px solid var(--line); border-radius:6px; font-family:var(--sans); font-size:.9rem; background:#fff;}
+  .field input:focus, .field select:focus{outline:none; border-color:var(--brass); box-shadow:0 0 0 3px rgba(201,124,46,.15);}
+  .field-row{display:flex; gap:.7rem;}
+  .field-row .field{flex:1;}
+  .field-hint{font-size:.74rem; color:#9A927F; margin-top:.3rem;}
+
+  .drawer-actions{display:flex; gap:.6rem; margin-top:1.4rem;}
+  .drawer-actions button{flex:1; padding:.7rem; border-radius:6px; font-weight:600; font-size:.88rem; cursor:pointer;}
+  .btn-save{background:var(--brass); color:var(--ink); border:none;}
+  .btn-save:hover{background:var(--brass-dim); color:var(--cream);}
+  .btn-cancel{background:none; border:1.5px solid var(--line); color:#6B655A;}
+  .btn-delete{width:100%; margin-top:.6rem; background:none; border:1.5px solid rgba(181,67,46,.4); color:var(--rust); padding:.6rem; border-radius:6px; font-size:.84rem; cursor:pointer;}
+  .btn-delete:hover{background:#FBEAE6;}
+
+  .drawer-error{display:none; background:#FBEAE6; border:1px solid rgba(181,67,46,.35); color:var(--rust); font-size:.82rem; padding:.55rem .7rem; border-radius:6px; margin-bottom:1rem;}
+  .drawer-error.show{display:block;}
+  .drawer-close{position:absolute; top:1.5rem; right:1.5rem; background:none; border:none; font-size:1.3rem; color:#9A927F; cursor:pointer;}
+
+  /* ---- stok hareket kutusu (mevcut üründe) ---- */
+  .stock-box{background:var(--cream-dim); border-radius:8px; padding:1rem; margin:1.2rem 0;}
+  .stock-box .current{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:.7rem;}
+  .stock-box .current .n{font-family:var(--mono); font-size:1.6rem; font-weight:700;}
+  .stock-box .current .label{font-size:.74rem; text-transform:uppercase; color:#8A8272; letter-spacing:.05em;}
+  .hareket-toggle{display:flex; gap:.5rem; margin-bottom:.6rem;}
+  .hareket-toggle button{
+    flex:1; padding:.5rem; border-radius:6px; font-size:.82rem; font-weight:600; cursor:pointer; border:1.5px solid var(--line); background:#fff;
+  }
+  .hareket-toggle button.active-giris{background:#E7F0E9; border-color:var(--green); color:var(--green);}
+  .hareket-toggle button.active-cikis{background:#FBEAE6; border-color:var(--rust); color:var(--rust);}
+  .hareket-form{display:none; margin-top:.7rem;}
+  .hareket-form.show{display:block;}
+  .hareket-form input{width:100%; padding:.55rem .7rem; border:1.5px solid var(--line); border-radius:6px; margin-bottom:.5rem; font-size:.88rem;}
+  .hareket-form button.kaydet-hareket{width:100%; background:var(--ink); color:var(--cream); border:none; padding:.55rem; border-radius:6px; font-weight:600; font-size:.85rem; cursor:pointer;}
+  .hareket-form button.kaydet-hareket:hover{background:var(--brass-dim);}
+
+  #authGate{display:flex; align-items:center; justify-content:center; height:100vh; font-family:var(--mono); color:#8A8272; font-size:.85rem;}
+  .toast{
+    position:fixed; bottom:1.5rem; right:1.5rem; background:var(--ink); color:var(--cream);
+    padding:.8rem 1.1rem; border-radius:8px; font-size:.83rem; box-shadow:0 6px 20px rgba(0,0,0,.25);
+    opacity:0; transform:translateY(10px); transition:opacity .2s ease, transform .2s ease;
+    z-index:50; max-width:320px;
+  }
+  .toast.show{opacity:1; transform:translateY(0);}
+</style>
+</head>
+<body>
+
+<div id="authGate">Kontrol ediliyor…</div>
+
+<div id="appRoot" style="display:none;">
+  <header class="topbar">
+    <div class="brand">Ragbet Ticaret<small>Panel</small></div>
+    <nav>
+      <a href="cari.html">Cari Hesaplar</a>
+      <a href="stok.html" class="active">Stok</a>
+      <a href="#" style="opacity:.4; cursor:default;">Satış (yakında)</a>
+      <a href="yedekleme.html">Yedekleme</a>
+    </nav>
+    <div class="user">
+      <span id="userEmail"></span>
+      <button class="logout" id="logoutBtn">Çıkış</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="page-head">
+      <div>
+        <h1>Stok</h1>
+        <p id="stokCount">Yükleniyor…</p>
+      </div>
+      <button class="primary" id="newStokBtn">+ Yeni Ürün</button>
+    </div>
+
+    <div class="toolbar">
+      <input type="text" id="searchInput" placeholder="Ürün adı, kod veya barkod ile ara…">
+      <select id="filterKritik">
+        <option value="">Tüm ürünler</option>
+        <option value="kritik">Sadece kritik stoktakiler</option>
+      </select>
+    </div>
+
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th>Kod</th><th>Barkod</th><th>Ürün Adı</th><th>Kategori</th>
+            <th>Birim</th><th>Satış Fiyatı</th><th>Stok</th>
+          </tr>
+        </thead>
+        <tbody id="stokTableBody">
+          <tr class="empty-row"><td colspan="7">Yükleniyor…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<div class="overlay" id="overlay"></div>
+<aside class="drawer" id="drawer">
+  <button class="drawer-close" id="drawerClose">✕</button>
+  <h2 id="drawerTitle">Yeni Ürün</h2>
+  <p class="drawer-sub" id="drawerSub">Yeni bir stok kartı oluşturun.</p>
+
+  <div class="drawer-error" id="drawerError"></div>
+
+  <form id="stokForm">
+    <input type="hidden" id="stokId">
+
+    <div class="field-row">
+      <div class="field">
+        <label for="kod">Kod *</label>
+        <input type="text" id="kod" required>
+      </div>
+      <div class="field">
+        <label for="barkod">Barkod</label>
+        <input type="text" id="barkod" placeholder="Boş bırakılabilir">
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="ad">Ürün Adı *</label>
+      <input type="text" id="ad" required>
+    </div>
+
+    <div class="field-row">
+      <div class="field">
+        <label for="birim">Birim</label>
+        <input type="text" id="birim" list="birimListe" value="Adet">
+        <datalist id="birimListe">
+          <option value="Adet"><option value="Kg"><option value="Metre"><option value="Kutu"><option value="Litre"><option value="Paket">
+        </datalist>
+      </div>
+      <div class="field">
+        <label for="kategori">Kategori</label>
+        <input type="text" id="kategori" list="katListe" placeholder="Ör: El Aletleri">
+        <datalist id="katListe"></datalist>
+      </div>
+    </div>
+
+    <div class="field-row">
+      <div class="field">
+        <label for="alis_fiyati">Alış Fiyatı (TL)</label>
+        <input type="number" step="0.01" id="alis_fiyati" value="0">
+      </div>
+      <div class="field">
+        <label for="satis_fiyati">Satış Fiyatı (TL) *</label>
+        <input type="number" step="0.01" id="satis_fiyati" required value="0">
+      </div>
+    </div>
+
+    <div class="field-row">
+      <div class="field">
+        <label for="kdv_orani">KDV Oranı (%)</label>
+        <input type="number" step="0.01" id="kdv_orani" value="20">
+      </div>
+      <div class="field">
+        <label for="kritik_stok_seviyesi">Kritik Stok Seviyesi</label>
+        <input type="number" step="0.01" id="kritik_stok_seviyesi" value="0">
+      </div>
+    </div>
+
+    <div class="field" id="baslangicStokField">
+      <label for="baslangic_stok">Başlangıç Stok Miktarı</label>
+      <input type="number" step="0.01" id="baslangic_stok" value="0">
+      <p class="field-hint">Bu ürünü ilk kez eklerken elinizdeki mevcut miktarı girin.</p>
+    </div>
+
+    <div class="stock-box" id="stockBox" style="display:none;">
+      <div class="current">
+        <div>
+          <div class="label">Güncel Stok</div>
+          <div class="n" id="currentMiktar">0</div>
+        </div>
+      </div>
+      <div class="hareket-toggle">
+        <button type="button" id="btnGirisToggle">+ Stok Girişi</button>
+        <button type="button" id="btnCikisToggle">− Stok Çıkışı</button>
+      </div>
+      <div class="hareket-form" id="girisForm">
+        <input type="number" step="0.01" id="girisMiktar" placeholder="Girilecek miktar">
+        <input type="text" id="girisAciklama" placeholder="Açıklama (ör: tedarikçiden mal geldi)">
+        <button type="button" class="kaydet-hareket" id="kaydetGiris">Girişi Kaydet</button>
+      </div>
+      <div class="hareket-form" id="cikisForm">
+        <input type="number" step="0.01" id="cikisMiktar" placeholder="Çıkarılacak miktar">
+        <input type="text" id="cikisAciklama" placeholder="Açıklama (ör: sayım düzeltmesi)">
+        <button type="button" class="kaydet-hareket" id="kaydetCikis">Çıkışı Kaydet</button>
+      </div>
+    </div>
+
+    <div class="drawer-actions">
+      <button type="button" class="btn-cancel" id="cancelBtn">Vazgeç</button>
+      <button type="submit" class="btn-save" id="saveBtn">Kaydet</button>
+    </div>
+    <button type="button" class="btn-delete" id="deleteBtn" style="display:none;">Bu Ürünü Sil</button>
+  </form>
+</aside>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const SUPABASE_URL = "https://npdpsnhmmvwdnwxknrre.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5wZHBzbmhtbXZ3ZG53eGtucnJlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwNzc1NzgsImV4cCI6MjEwMTY1MzU3OH0.-YdM8RBnT2jSobwUQydQMs-eElZnkoLta6MjNqENSNY";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  function showToast(msg){
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(()=> t.classList.remove('show'), 4500);
+  }
+
+  let allStok = [];
+  let editingId = null;
+  let currentUserId = null;
+  let subeId = null;
+
+  sb.auth.getSession().then(async ({data})=>{
+    if (!data.session){ window.location.href = 'login.html'; return; }
+    currentUserId = data.session.user.id;
+    document.getElementById('userEmail').textContent = data.session.user.email;
+
+    const { data: subeData } = await sb.from('sube').select('id').limit(1).single();
+    subeId = subeData ? subeData.id : null;
+    otomatikYedekKontrol(sb, showToast);
+
+    document.getElementById('authGate').style.display = 'none';
+    document.getElementById('appRoot').style.display = 'block';
+    loadStok();
+  });
+
+  document.getElementById('logoutBtn').addEventListener('click', async ()=>{
+    await sb.auth.signOut();
+    window.location.href = 'login.html';
+  });
+
+  async function loadStok(){
+    const { data, error } = await sb
+      .from('stok')
+      .select('*, sube_stok(miktar, sube_id)')
+      .order('created_at', { ascending:false });
+
+    if (error){
+      document.getElementById('stokTableBody').innerHTML =
+        `<tr class="empty-row"><td colspan="7">Veri yüklenemedi: ${error.message}</td></tr>`;
+      return;
+    }
+    allStok = data.map(s=>{
+      const rec = (s.sube_stok || []).find(x=>x.sube_id === subeId);
+      return { ...s, miktar: rec ? Number(rec.miktar) : 0 };
+    });
+
+    const kategoriler = [...new Set(allStok.map(s=>s.kategori).filter(Boolean))];
+    document.getElementById('katListe').innerHTML = kategoriler.map(k=>`<option value="${escapeHtml(k)}">`).join('');
+
+    renderTable();
+  }
+
+  function renderTable(){
+    const search = document.getElementById('searchInput').value.trim().toLowerCase();
+    const kritikFilter = document.getElementById('filterKritik').value;
+
+    let rows = allStok.filter(s=>{
+      const matchesSearch = !search ||
+        s.ad.toLowerCase().includes(search) ||
+        s.kod.toLowerCase().includes(search) ||
+        (s.barkod || '').toLowerCase().includes(search);
+      const isKritik = s.kritik_stok_seviyesi > 0 && s.miktar <= s.kritik_stok_seviyesi;
+      const matchesKritik = !kritikFilter || isKritik;
+      return matchesSearch && matchesKritik;
+    });
+
+    document.getElementById('stokCount').textContent = `${allStok.length} ürün kayıtlı`;
+
+    const tbody = document.getElementById('stokTableBody');
+    if (rows.length === 0){
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="7">Kayıt bulunamadı.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = rows.map(s=>{
+      const isKritik = s.kritik_stok_seviyesi > 0 && s.miktar <= s.kritik_stok_seviyesi;
+      const pillClass = isKritik ? 'stok-kritik' : 'stok-ok';
+      return `
+        <tr data-id="${s.id}">
+          <td class="kod-cell">${escapeHtml(s.kod)}</td>
+          <td class="kod-cell">${escapeHtml(s.barkod || '—')}</td>
+          <td>${escapeHtml(s.ad)}</td>
+          <td>${escapeHtml(s.kategori || '—')}</td>
+          <td>${escapeHtml(s.birim)}</td>
+          <td>${Number(s.satis_fiyati).toLocaleString('tr-TR',{minimumFractionDigits:2})} TL</td>
+          <td><span class="stok-pill ${pillClass}">${s.miktar} ${escapeHtml(s.birim)}</span></td>
+        </tr>`;
+    }).join('');
+
+    tbody.querySelectorAll('tr[data-id]').forEach(tr=>{
+      tr.addEventListener('click', ()=> openEdit(tr.dataset.id));
+    });
+  }
+
+  function escapeHtml(str){
+    const div = document.createElement('div');
+    div.textContent = str ?? '';
+    return div.innerHTML;
+  }
+
+  document.getElementById('searchInput').addEventListener('input', renderTable);
+  document.getElementById('filterKritik').addEventListener('change', renderTable);
+
+  // ---- Drawer ----
+  const overlay = document.getElementById('overlay');
+  const drawer = document.getElementById('drawer');
+  const form = document.getElementById('stokForm');
+  const drawerError = document.getElementById('drawerError');
+
+  function openDrawer(){ overlay.classList.add('show'); drawer.classList.add('show'); }
+  function closeDrawer(){
+    overlay.classList.remove('show'); drawer.classList.remove('show');
+    drawerError.classList.remove('show'); form.reset(); editingId = null;
+    document.getElementById('girisForm').classList.remove('show');
+    document.getElementById('cikisForm').classList.remove('show');
+  }
+  overlay.addEventListener('click', closeDrawer);
+  document.getElementById('drawerClose').addEventListener('click', closeDrawer);
+  document.getElementById('cancelBtn').addEventListener('click', closeDrawer);
+
+  async function nextSuggestedKod(){
+    const { count } = await sb.from('stok').select('*', { count:'exact', head:true });
+    return 'STK-' + String((count || 0) + 1).padStart(4, '0');
+  }
+
+  document.getElementById('newStokBtn').addEventListener('click', async ()=>{
+    editingId = null;
+    document.getElementById('drawerTitle').textContent = 'Yeni Ürün';
+    document.getElementById('drawerSub').textContent = 'Yeni bir stok kartı oluşturun.';
+    document.getElementById('deleteBtn').style.display = 'none';
+    document.getElementById('stockBox').style.display = 'none';
+    document.getElementById('baslangicStokField').style.display = 'block';
+    form.reset();
+    document.getElementById('kod').value = await nextSuggestedKod();
+    document.getElementById('birim').value = 'Adet';
+    document.getElementById('kdv_orani').value = 20;
+    openDrawer();
+  });
+
+  function openEdit(id){
+    const s = allStok.find(x=>x.id === id);
+    if (!s) return;
+    editingId = id;
+    document.getElementById('drawerTitle').textContent = s.ad;
+    document.getElementById('drawerSub').textContent = 'Kayıt bilgilerini düzenleyin.';
+    document.getElementById('kod').value = s.kod;
+    document.getElementById('barkod').value = s.barkod || '';
+    document.getElementById('ad').value = s.ad;
+    document.getElementById('birim').value = s.birim;
+    document.getElementById('kategori').value = s.kategori || '';
+    document.getElementById('alis_fiyati').value = s.alis_fiyati;
+    document.getElementById('satis_fiyati').value = s.satis_fiyati;
+    document.getElementById('kdv_orani').value = s.kdv_orani;
+    document.getElementById('kritik_stok_seviyesi').value = s.kritik_stok_seviyesi;
+
+    document.getElementById('baslangicStokField').style.display = 'none';
+    document.getElementById('stockBox').style.display = 'block';
+    document.getElementById('currentMiktar').textContent = s.miktar + ' ' + s.birim;
+    document.getElementById('girisForm').classList.remove('show');
+    document.getElementById('cikisForm').classList.remove('show');
+
+    document.getElementById('deleteBtn').style.display = 'block';
+    drawerError.classList.remove('show');
+    openDrawer();
+  }
+
+  document.getElementById('btnGirisToggle').addEventListener('click', ()=>{
+    document.getElementById('girisForm').classList.toggle('show');
+    document.getElementById('cikisForm').classList.remove('show');
+  });
+  document.getElementById('btnCikisToggle').addEventListener('click', ()=>{
+    document.getElementById('cikisForm').classList.toggle('show');
+    document.getElementById('girisForm').classList.remove('show');
+  });
+
+  async function applyStokHareket(tip, miktarInputId, aciklamaInputId){
+    const miktar = parseFloat(document.getElementById(miktarInputId).value);
+    const aciklama = document.getElementById(aciklamaInputId).value.trim() || null;
+    if (!miktar || miktar <= 0){
+      alert('Lütfen geçerli bir miktar girin.');
+      return;
+    }
+    const s = allStok.find(x=>x.id === editingId);
+    const mevcut = s ? s.miktar : 0;
+    const yeniMiktar = tip === 'giris' ? mevcut + miktar : mevcut - miktar;
+
+    if (tip === 'cikis' && yeniMiktar < 0){
+      if (!confirm(`Stok eksiye düşecek (${yeniMiktar}). Yine de devam edilsin mi?`)) return;
+    }
+
+    const { error: upsertErr } = await sb.from('sube_stok').upsert(
+      { sube_id: subeId, stok_id: editingId, miktar: yeniMiktar },
+      { onConflict: 'sube_id,stok_id' }
+    );
+    if (upsertErr){ alert('Stok güncellenemedi: ' + upsertErr.message); return; }
+
+    await sb.from('stok_hareket').insert({
+      sube_id: subeId, stok_id: editingId, tip, miktar, aciklama, kullanici_id: currentUserId
+    });
+
+    closeDrawer();
+    loadStok();
+  }
+
+  document.getElementById('kaydetGiris').addEventListener('click', ()=> applyStokHareket('giris','girisMiktar','girisAciklama'));
+  document.getElementById('kaydetCikis').addEventListener('click', ()=> applyStokHareket('cikis','cikisMiktar','cikisAciklama'));
+
+  // ---- Kaydet (kart oluştur/güncelle) ----
+  form.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    drawerError.classList.remove('show');
+
+    const barkodVal = document.getElementById('barkod').value.trim();
+    const payload = {
+      kod: document.getElementById('kod').value.trim(),
+      barkod: barkodVal || null,
+      ad: document.getElementById('ad').value.trim(),
+      birim: document.getElementById('birim').value.trim() || 'Adet',
+      kategori: document.getElementById('kategori').value.trim() || null,
+      alis_fiyati: parseFloat(document.getElementById('alis_fiyati').value) || 0,
+      satis_fiyati: parseFloat(document.getElementById('satis_fiyati').value) || 0,
+      kdv_orani: parseFloat(document.getElementById('kdv_orani').value) || 0,
+      kritik_stok_seviyesi: parseFloat(document.getElementById('kritik_stok_seviyesi').value) || 0,
+    };
+
+    let error, newId = editingId;
+    if (editingId){
+      ({ error } = await sb.from('stok').update(payload).eq('id', editingId));
+    } else {
+      const { data, error: insErr } = await sb.from('stok').insert(payload).select().single();
+      error = insErr;
+      if (data) newId = data.id;
+    }
+
+    if (error){
+      if (error.message && error.message.includes('duplicate key') && error.message.includes('kod')){
+        drawerError.textContent = 'Bu ürün kodu zaten kullanılıyor. Lütfen farklı bir kod girin.';
+      } else if (error.message && error.message.includes('duplicate key') && error.message.includes('barkod')){
+        drawerError.textContent = 'Bu barkod zaten başka bir üründe kayıtlı.';
+      } else {
+        drawerError.textContent = 'Kaydedilemedi: ' + error.message;
+      }
+      drawerError.classList.add('show');
+      return;
+    }
+
+    // Yeni ürünse ve başlangıç stok miktarı girildiyse, ilk stok hareketini oluştur
+    if (!editingId){
+      const baslangic = parseFloat(document.getElementById('baslangic_stok').value) || 0;
+      if (baslangic > 0){
+        await sb.from('sube_stok').upsert(
+          { sube_id: subeId, stok_id: newId, miktar: baslangic },
+          { onConflict: 'sube_id,stok_id' }
+        );
+        await sb.from('stok_hareket').insert({
+          sube_id: subeId, stok_id: newId, tip:'giris', miktar: baslangic,
+          aciklama:'İlk stok girişi', kullanici_id: currentUserId
+        });
+      }
+    }
+
+    closeDrawer();
+    loadStok();
+  });
+
+  // ---- Sil ----
+  document.getElementById('deleteBtn').addEventListener('click', async ()=>{
+    if (!editingId) return;
+    if (!confirm('Bu ürünü silmek istediğinize emin misiniz? Bu işlem geri alınamaz.')) return;
+
+    const { error } = await sb.from('stok').delete().eq('id', editingId);
+    if (error){
+      drawerError.textContent = 'Silinemedi: ' + error.message;
+      drawerError.classList.add('show');
+      return;
+    }
+    closeDrawer();
+    loadStok();
+  });
+</script>
+</body>
+</html>

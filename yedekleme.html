@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ragbet Ticaret — Yedekleme Merkezi</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="yedek.js"></script>
+<style>
+  :root{
+    --ink:#1C1B19; --panel:#24221F; --cream:#F5F1E8; --cream-dim:#E8E2D3;
+    --brass:#C97C2E; --brass-dim:#9C611F; --muted:#A39B8B; --rust:#B5432E;
+    --green:#3F7D4E; --line:#DAD2C0; --mono:'JetBrains Mono', monospace; --sans:'Inter', sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{font-family:var(--sans); background:var(--cream); color:var(--ink); min-height:100vh;}
+
+  .topbar{background:var(--ink); color:var(--cream); display:flex; align-items:center; justify-content:space-between; padding:0 1.75rem; height:60px;}
+  .topbar .brand{font-family:var(--mono); font-weight:700; font-size:1.05rem;}
+  .topbar .brand small{font-weight:400; font-size:.7rem; color:var(--brass); letter-spacing:.1em; text-transform:uppercase; margin-left:.5rem;}
+  .topbar nav{display:flex; align-items:center; gap:1.5rem;}
+  .topbar nav a{color:var(--muted); text-decoration:none; font-size:.85rem; font-weight:500;}
+  .topbar nav a.active{color:var(--cream); border-bottom:2px solid var(--brass); padding-bottom:4px;}
+  .topbar .user{display:flex; align-items:center; gap:.9rem;}
+  .topbar .user span{font-size:.8rem; color:var(--muted); font-family:var(--mono);}
+  .topbar button.logout{background:none; border:1px solid #45423C; color:var(--cream-dim); padding:.4rem .8rem; border-radius:5px; font-size:.78rem; cursor:pointer;}
+
+  main{max-width:820px; margin:0 auto; padding:2rem 1.5rem 4rem;}
+  h1{font-size:1.5rem; font-weight:600; margin-bottom:.3rem;}
+  .lead{font-size:.88rem; color:#6B655A; margin-bottom:1.8rem; line-height:1.55;}
+
+  .status-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(200px,1fr)); gap:1rem; margin-bottom:1.8rem;}
+  .status-card{background:#fff; border:1px solid var(--line); border-radius:10px; padding:1.1rem 1.2rem;}
+  .status-card .etiket{font-size:.72rem; text-transform:uppercase; letter-spacing:.05em; color:#8A8272; font-weight:600; margin-bottom:.5rem;}
+  .status-card .deger{font-family:var(--mono); font-size:1rem; font-weight:700;}
+  .status-card .durum{display:inline-block; margin-top:.5rem; padding:.15rem .5rem; border-radius:20px; font-size:.72rem; font-weight:600;}
+  .durum-ok{background:#E7F0E9; color:var(--green);}
+  .durum-gecikmis{background:#FBEAE6; color:var(--rust);}
+
+  button.primary{background:var(--brass); color:var(--ink); border:none; padding:.75rem 1.3rem; border-radius:6px; font-weight:600; font-size:.92rem; cursor:pointer; margin-bottom:2rem;}
+  button.primary:hover{background:var(--brass-dim); color:var(--cream);}
+  button.primary:disabled{opacity:.6; cursor:not-allowed;}
+
+  .note-box{background:var(--cream-dim); border-radius:8px; padding:1rem 1.2rem; font-size:.83rem; color:#5B5546; line-height:1.6; margin-bottom:2rem;}
+  .note-box b{color:var(--ink);}
+
+  h2.sub{font-size:1.05rem; font-weight:600; margin-bottom:.8rem;}
+  .history{background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden;}
+  .history table{width:100%; border-collapse:collapse;}
+  .history th{text-align:left; font-size:.72rem; text-transform:uppercase; color:#8A8272; padding:.7rem 1rem; background:var(--cream-dim);}
+  .history td{padding:.7rem 1rem; font-size:.85rem; border-top:1px solid #F0EBDF;}
+  .tip-badge{display:inline-block; padding:.15rem .5rem; border-radius:20px; font-size:.72rem; font-weight:600; background:var(--cream-dim); color:var(--brass-dim);}
+  .empty{padding:2rem; text-align:center; color:#9A927F; font-size:.85rem;}
+
+  #authGate{display:flex; align-items:center; justify-content:center; height:100vh; font-family:var(--mono); color:#8A8272; font-size:.85rem;}
+
+  .toast{position:fixed; bottom:1.5rem; right:1.5rem; background:var(--ink); color:var(--cream); padding:.8rem 1.1rem; border-radius:8px; font-size:.83rem; box-shadow:0 6px 20px rgba(0,0,0,.25); opacity:0; transform:translateY(10px); transition:opacity .2s ease, transform .2s ease; z-index:50; max-width:320px;}
+  .toast.show{opacity:1; transform:translateY(0);}
+</style>
+</head>
+<body>
+
+<div id="authGate">Kontrol ediliyor…</div>
+
+<div id="appRoot" style="display:none;">
+  <header class="topbar">
+    <div class="brand">Ragbet Ticaret<small>Panel</small></div>
+    <nav>
+      <a href="cari.html">Cari Hesaplar</a>
+      <a href="stok.html">Stok</a>
+      <a href="#" style="opacity:.4; cursor:default;">Satış (yakında)</a>
+      <a href="yedekleme.html" class="active">Yedekleme</a>
+    </nav>
+    <div class="user">
+      <span id="userEmail"></span>
+      <button class="logout" id="logoutBtn">Çıkış</button>
+    </div>
+  </header>
+
+  <main>
+    <h1>Yedekleme Merkezi</h1>
+    <p class="lead">
+      Sistem her açılışta günlük/haftalık/aylık yedeklerin süresi geldi mi diye
+      sessizce kontrol eder ve gerekirse otomatik indirir. İsterseniz aşağıdan
+      istediğiniz an elle de tam yedek alabilirsiniz.
+    </p>
+
+    <div class="status-grid" id="statusGrid"></div>
+
+    <button class="primary" id="manualBackupBtn">Şimdi Tam Yedek Al (Excel)</button>
+
+    <div class="note-box">
+      <b>Bilmeniz gerekenler:</b><br>
+      • Yedekler bilgisayarınızın normalde dosya indirdiği klasöre (genelde "İndirilenler") kaydedilir.<br>
+      • Otomatik yedek, sadece bu sayfayı veya sistemin diğer ekranlarını (Cari, Stok) açtığınızda kontrol edilir — tarayıcı tamamen kapalıyken hiçbir sistem arka planda çalışamaz, bu bütün web siteleri için geçerli bir kuraldır.<br>
+      • Kullandığımız veritabanı hizmetinin (Supabase) ücretsiz planında kendi otomatik yedeklemesi yoktur — bu yüzden bu Excel yedekleri şu an verinizin gerçek güvenlik ağıdır. Düzenli olarak sistemi açık tutmanız/kullanmanız önemlidir.
+    </div>
+
+    <h2 class="sub">Yedek Geçmişi</h2>
+    <div class="history" id="historyBox"></div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const SUPABASE_URL = "https://npdpsnhmmvwdnwxknrre.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5wZHBzbmhtbXZ3ZG53eGtucnJlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwNzc1NzgsImV4cCI6MjEwMTY1MzU3OH0.-YdM8RBnT2jSobwUQydQMs-eElZnkoLta6MjNqENSNY";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  function showToast(msg){
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(()=> t.classList.remove('show'), 4500);
+  }
+
+  sb.auth.getSession().then(async ({data})=>{
+    if (!data.session){ window.location.href = 'login.html'; return; }
+    document.getElementById('userEmail').textContent = data.session.user.email;
+    document.getElementById('authGate').style.display = 'none';
+    document.getElementById('appRoot').style.display = 'block';
+
+    renderStatus();
+    renderHistory();
+    await otomatikYedekKontrol(sb, (msg)=>{ showToast(msg); renderStatus(); renderHistory(); });
+  });
+
+  document.getElementById('logoutBtn').addEventListener('click', async ()=>{
+    await sb.auth.signOut();
+    window.location.href = 'login.html';
+  });
+
+  function formatTarih(iso){
+    if (!iso) return 'Henüz alınmadı';
+    const d = new Date(iso);
+    return d.toLocaleString('tr-TR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  }
+
+  function renderStatus(){
+    const tanimlar = [
+      { tip:'gunluk', etiket:'Günlük Yedek', esik:1 },
+      { tip:'haftalik', etiket:'Haftalık Yedek', esik:7 },
+      { tip:'aylik', etiket:'Aylık Yedek', esik:30 },
+    ];
+    const grid = document.getElementById('statusGrid');
+    grid.innerHTML = tanimlar.map(t=>{
+      const son = localStorage.getItem('yedek_son_' + t.tip);
+      const fark = gunFarki(son);
+      const gecikmis = fark >= t.esik;
+      return `
+        <div class="status-card">
+          <div class="etiket">${t.etiket}</div>
+          <div class="deger">${formatTarih(son)}</div>
+          <span class="durum ${gecikmis ? 'durum-gecikmis' : 'durum-ok'}">${gecikmis ? 'Süresi geldi' : 'Güncel'}</span>
+        </div>`;
+    }).join('');
+  }
+
+  function renderHistory(){
+    const gecmis = JSON.parse(localStorage.getItem('yedek_gecmisi') || '[]');
+    const box = document.getElementById('historyBox');
+    if (gecmis.length === 0){
+      box.innerHTML = `<div class="empty">Henüz yedek alınmadı.</div>`;
+      return;
+    }
+    const etiketler = { gunluk:'Günlük', haftalik:'Haftalık', aylik:'Aylık', manuel:'Manuel' };
+    box.innerHTML = `
+      <table>
+        <thead><tr><th>Tarih</th><th>Tip</th><th>Dosya Adı</th></tr></thead>
+        <tbody>
+          ${gecmis.map(g=>`
+            <tr>
+              <td>${formatTarih(g.tarih)}</td>
+              <td><span class="tip-badge">${etiketler[g.tip] || g.tip}</span></td>
+              <td style="font-family:var(--mono); font-size:.78rem;">${g.dosyaAdi}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+  }
+
+  document.getElementById('manualBackupBtn').addEventListener('click', async ()=>{
+    const btn = document.getElementById('manualBackupBtn');
+    btn.disabled = true;
+    btn.textContent = 'Yedek hazırlanıyor…';
+    try{
+      const dosyaAdi = await yedekAl(sb, 'manuel');
+      showToast('Yedek indirildi: ' + dosyaAdi);
+      renderStatus();
+      renderHistory();
+    } catch(e){
+      showToast('Hata: ' + e.message);
+    }
+    btn.disabled = false;
+    btn.textContent = 'Şimdi Tam Yedek Al (Excel)';
+  });
+</script>
+</body>
+</html>

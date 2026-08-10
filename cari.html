@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ragbet Ticaret — Cari Hesaplar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="yedek.js"></script>
+<style>
+  :root{
+    --ink:#1C1B19;
+    --panel:#24221F;
+    --cream:#F5F1E8;
+    --cream-dim:#E8E2D3;
+    --brass:#C97C2E;
+    --brass-dim:#9C611F;
+    --muted:#A39B8B;
+    --rust:#B5432E;
+    --green:#3F7D4E;
+    --line:#DAD2C0;
+    --mono:'JetBrains Mono', monospace;
+    --sans:'Inter', sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    font-family:var(--sans);
+    background:var(--cream);
+    color:var(--ink);
+    min-height:100vh;
+  }
+
+  /* ---- top bar ---- */
+  .topbar{
+    background:var(--ink);
+    color:var(--cream);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:0 1.75rem;
+    height:60px;
+  }
+  .topbar .brand{
+    font-family:var(--mono);
+    font-weight:700;
+    font-size:1.05rem;
+    letter-spacing:-.01em;
+    display:flex;
+    align-items:baseline;
+    gap:.5rem;
+  }
+  .topbar .brand small{
+    font-weight:400;
+    font-size:.7rem;
+    color:var(--brass);
+    letter-spacing:.1em;
+    text-transform:uppercase;
+  }
+  .topbar nav{display:flex; align-items:center; gap:1.5rem;}
+  .topbar nav a{
+    color:var(--muted);
+    text-decoration:none;
+    font-size:.85rem;
+    font-weight:500;
+  }
+  .topbar nav a.active{color:var(--cream); border-bottom:2px solid var(--brass); padding-bottom:4px;}
+  .topbar .user{display:flex; align-items:center; gap:.9rem;}
+  .topbar .user span{font-size:.8rem; color:var(--muted); font-family:var(--mono);}
+  .topbar button.logout{
+    background:none; border:1px solid #45423C; color:var(--cream-dim);
+    padding:.4rem .8rem; border-radius:5px; font-size:.78rem; cursor:pointer;
+  }
+  .topbar button.logout:hover{border-color:var(--brass);}
+
+  main{max-width:1100px; margin:0 auto; padding:2rem 1.5rem 4rem;}
+
+  .page-head{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:1.4rem; flex-wrap:wrap; gap:1rem;
+  }
+  .page-head h1{font-size:1.5rem; font-weight:600;}
+  .page-head p{font-size:.85rem; color:#6B655A; margin-top:.2rem;}
+  button.primary{
+    background:var(--brass); color:var(--ink); border:none;
+    padding:.65rem 1.1rem; border-radius:6px; font-weight:600; font-size:.9rem;
+    cursor:pointer; transition:background .15s ease;
+  }
+  button.primary:hover{background:var(--brass-dim); color:var(--cream);}
+
+  .toolbar{display:flex; gap:.7rem; margin-bottom:1.2rem; flex-wrap:wrap;}
+  .toolbar input, .toolbar select{
+    padding:.6rem .8rem; border:1.5px solid var(--line); border-radius:6px;
+    font-family:var(--sans); font-size:.88rem; background:#fff;
+  }
+  .toolbar input{flex:1; min-width:200px;}
+  .toolbar input:focus, .toolbar select:focus{outline:none; border-color:var(--brass);}
+
+  .card{background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden;}
+  table{width:100%; border-collapse:collapse;}
+  thead th{
+    text-align:left; font-size:.72rem; text-transform:uppercase; letter-spacing:.05em;
+    color:#8A8272; padding:.8rem 1rem; background:var(--cream-dim); font-weight:600;
+  }
+  tbody td{padding:.85rem 1rem; font-size:.88rem; border-top:1px solid #F0EBDF;}
+  tbody tr{cursor:pointer; transition:background .1s ease;}
+  tbody tr:hover{background:#FBF9F3;}
+  .kod-cell{font-family:var(--mono); font-size:.8rem; color:#8A8272;}
+  .tip-badge{
+    display:inline-block; padding:.2rem .55rem; border-radius:20px;
+    font-size:.72rem; font-weight:600;
+  }
+  .tip-musteri{background:#E7F0E9; color:var(--green);}
+  .tip-tedarikci{background:#F3E7DC; color:var(--brass-dim);}
+  .tip-her_ikisi{background:#EAE6F5; color:#5B4E9C;}
+  .bakiye-pos{color:var(--green); font-weight:600;}
+  .bakiye-neg{color:var(--rust); font-weight:600;}
+  .empty-row td{text-align:center; color:#9A927F; padding:2.5rem 1rem;}
+
+  /* ---- drawer ---- */
+  .overlay{
+    position:fixed; inset:0; background:rgba(28,27,25,.45);
+    opacity:0; pointer-events:none; transition:opacity .18s ease; z-index:20;
+  }
+  .overlay.show{opacity:1; pointer-events:auto;}
+  .drawer{
+    position:fixed; top:0; right:0; height:100vh; width:min(420px, 92vw);
+    background:var(--cream); box-shadow:-8px 0 24px rgba(0,0,0,.15);
+    transform:translateX(100%); transition:transform .22s ease;
+    z-index:21; overflow-y:auto; padding:1.75rem;
+  }
+  .drawer.show{transform:translateX(0);}
+  .drawer h2{font-size:1.2rem; margin-bottom:.2rem;}
+  .drawer .drawer-sub{font-size:.8rem; color:#6B655A; margin-bottom:1.4rem;}
+  .field{margin-bottom:1rem;}
+  .field label{
+    display:block; font-size:.72rem; font-weight:600; text-transform:uppercase;
+    letter-spacing:.03em; color:#6B655A; margin-bottom:.35rem;
+  }
+  .field input, .field select, .field textarea{
+    width:100%; padding:.65rem .8rem; border:1.5px solid var(--line); border-radius:6px;
+    font-family:var(--sans); font-size:.9rem; background:#fff;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus{outline:none; border-color:var(--brass); box-shadow:0 0 0 3px rgba(201,124,46,.15);}
+  .field textarea{resize:vertical; min-height:60px;}
+  .field-row{display:flex; gap:.7rem;}
+  .field-row .field{flex:1;}
+
+  .statement-box{
+    background:var(--cream-dim); border-radius:8px; padding:1rem;
+    margin:1.2rem 0; font-size:.82rem; color:#5B5546; line-height:1.5;
+  }
+  .statement-box b{color:var(--ink);}
+
+  .drawer-actions{display:flex; gap:.6rem; margin-top:1.4rem;}
+  .drawer-actions button{
+    flex:1; padding:.7rem; border-radius:6px; font-weight:600; font-size:.88rem; cursor:pointer;
+  }
+  .btn-save{background:var(--brass); color:var(--ink); border:none;}
+  .btn-save:hover{background:var(--brass-dim); color:var(--cream);}
+  .btn-cancel{background:none; border:1.5px solid var(--line); color:#6B655A;}
+  .btn-delete{
+    width:100%; margin-top:.6rem; background:none; border:1.5px solid rgba(181,67,46,.4);
+    color:var(--rust); padding:.6rem; border-radius:6px; font-size:.84rem; cursor:pointer;
+  }
+  .btn-delete:hover{background:#FBEAE6;}
+
+  .drawer-error{
+    display:none; background:#FBEAE6; border:1px solid rgba(181,67,46,.35); color:var(--rust);
+    font-size:.82rem; padding:.55rem .7rem; border-radius:6px; margin-bottom:1rem;
+  }
+  .drawer-error.show{display:block;}
+
+  .drawer-close{
+    position:absolute; top:1.5rem; right:1.5rem; background:none; border:none;
+    font-size:1.3rem; color:#9A927F; cursor:pointer; line-height:1;
+  }
+
+  #authGate{
+    display:flex; align-items:center; justify-content:center; height:100vh;
+    font-family:var(--mono); color:#8A8272; font-size:.85rem;
+  }
+  .toast{
+    position:fixed; bottom:1.5rem; right:1.5rem; background:var(--ink); color:var(--cream);
+    padding:.8rem 1.1rem; border-radius:8px; font-size:.83rem; box-shadow:0 6px 20px rgba(0,0,0,.25);
+    opacity:0; transform:translateY(10px); transition:opacity .2s ease, transform .2s ease;
+    z-index:50; max-width:320px;
+  }
+  .toast.show{opacity:1; transform:translateY(0);}
+</style>
+</head>
+<body>
+
+<div id="authGate">Kontrol ediliyor…</div>
+
+<div id="appRoot" style="display:none;">
+
+  <header class="topbar">
+    <div class="brand">Ragbet<span>&nbsp;</span>Ticaret <small>Panel</small></div>
+    <nav>
+      <a href="cari.html" class="active">Cari Hesaplar</a>
+      <a href="stok.html">Stok</a>
+      <a href="#" style="opacity:.4; cursor:default;">Satış (yakında)</a>
+      <a href="yedekleme.html">Yedekleme</a>
+    </nav>
+    <div class="user">
+      <span id="userEmail"></span>
+      <button class="logout" id="logoutBtn">Çıkış</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="page-head">
+      <div>
+        <h1>Cari Hesaplar</h1>
+        <p id="cariCount">Yükleniyor…</p>
+      </div>
+      <button class="primary" id="newCariBtn">+ Yeni Cari</button>
+    </div>
+
+    <div class="toolbar">
+      <input type="text" id="searchInput" placeholder="Ünvan, kod veya telefon ile ara…">
+      <select id="filterTip">
+        <option value="">Tümü</option>
+        <option value="musteri">Müşteri</option>
+        <option value="tedarikci">Tedarikçi</option>
+        <option value="her_ikisi">Her ikisi</option>
+      </select>
+    </div>
+
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th>Kod</th>
+            <th>Ünvan</th>
+            <th>Tip</th>
+            <th>Yetkili</th>
+            <th>Telefon</th>
+            <th>Açılış Bakiyesi</th>
+          </tr>
+        </thead>
+        <tbody id="cariTableBody">
+          <tr class="empty-row"><td colspan="6">Yükleniyor…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+</div>
+
+<div class="overlay" id="overlay"></div>
+<aside class="drawer" id="drawer">
+  <button class="drawer-close" id="drawerClose">✕</button>
+  <h2 id="drawerTitle">Yeni Cari</h2>
+  <p class="drawer-sub" id="drawerSub">Yeni bir müşteri veya tedarikçi kartı oluşturun.</p>
+
+  <div class="drawer-error" id="drawerError"></div>
+
+  <form id="cariForm">
+    <input type="hidden" id="cariId">
+
+    <div class="field-row">
+      <div class="field">
+        <label for="kod">Kod *</label>
+        <input type="text" id="kod" required>
+      </div>
+      <div class="field">
+        <label for="tip">Tip *</label>
+        <select id="tip" required>
+          <option value="musteri">Müşteri</option>
+          <option value="tedarikci">Tedarikçi</option>
+          <option value="her_ikisi">Her ikisi</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="unvan">Ünvan / Ad Soyad *</label>
+      <input type="text" id="unvan" required>
+    </div>
+
+    <div class="field-row">
+      <div class="field">
+        <label for="yetkili_kisi">Yetkili Kişi</label>
+        <input type="text" id="yetkili_kisi">
+      </div>
+      <div class="field">
+        <label for="telefon">Telefon</label>
+        <input type="text" id="telefon">
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="adres">Adres</label>
+      <textarea id="adres"></textarea>
+    </div>
+
+    <div class="field-row">
+      <div class="field">
+        <label for="vergi_dairesi">Vergi Dairesi</label>
+        <input type="text" id="vergi_dairesi">
+      </div>
+      <div class="field">
+        <label for="vergi_no">Vergi No</label>
+        <input type="text" id="vergi_no">
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="acilis_bakiye">Açılış Bakiyesi (TL)</label>
+      <input type="number" step="0.01" id="acilis_bakiye" value="0">
+    </div>
+
+    <div class="field">
+      <label for="ozel_not">Özel Not</label>
+      <textarea id="ozel_not"></textarea>
+    </div>
+
+    <div id="statementBox" class="statement-box" style="display:none;"></div>
+
+    <div class="drawer-actions">
+      <button type="button" class="btn-cancel" id="cancelBtn">Vazgeç</button>
+      <button type="submit" class="btn-save" id="saveBtn">Kaydet</button>
+    </div>
+    <button type="button" class="btn-delete" id="deleteBtn" style="display:none;">Bu Cariyi Sil</button>
+  </form>
+</aside>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const SUPABASE_URL = "https://npdpsnhmmvwdnwxknrre.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5wZHBzbmhtbXZ3ZG53eGtucnJlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwNzc1NzgsImV4cCI6MjEwMTY1MzU3OH0.-YdM8RBnT2jSobwUQydQMs-eElZnkoLta6MjNqENSNY";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  function showToast(msg){
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(()=> t.classList.remove('show'), 4500);
+  }
+
+  let allCari = [];
+  let editingId = null;
+
+  // ---- Giriş kontrolü ----
+  sb.auth.getSession().then(async ({data})=>{
+    if (!data.session){
+      window.location.href = 'login.html';
+      return;
+    }
+    document.getElementById('userEmail').textContent = data.session.user.email;
+    document.getElementById('authGate').style.display = 'none';
+    document.getElementById('appRoot').style.display = 'block';
+    loadCari();
+    otomatikYedekKontrol(sb, showToast);
+  });
+
+  document.getElementById('logoutBtn').addEventListener('click', async ()=>{
+    await sb.auth.signOut();
+    window.location.href = 'login.html';
+  });
+
+  // ---- Cari listesini yükle ----
+  async function loadCari(){
+    const { data, error } = await sb.from('cari').select('*').order('created_at', { ascending:false });
+    if (error){
+      document.getElementById('cariTableBody').innerHTML =
+        `<tr class="empty-row"><td colspan="6">Veri yüklenemedi: ${error.message}</td></tr>`;
+      return;
+    }
+    allCari = data;
+    renderTable();
+  }
+
+  function renderTable(){
+    const search = document.getElementById('searchInput').value.trim().toLowerCase();
+    const tipFilter = document.getElementById('filterTip').value;
+
+    let rows = allCari.filter(c=>{
+      const matchesSearch = !search ||
+        c.unvan.toLowerCase().includes(search) ||
+        c.kod.toLowerCase().includes(search) ||
+        (c.telefon || '').toLowerCase().includes(search);
+      const matchesTip = !tipFilter || c.tip === tipFilter;
+      return matchesSearch && matchesTip;
+    });
+
+    document.getElementById('cariCount').textContent = `${allCari.length} cari kayıtlı`;
+
+    const tbody = document.getElementById('cariTableBody');
+    if (rows.length === 0){
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="6">Kayıt bulunamadı. Yeni bir cari ekleyin.</td></tr>`;
+      return;
+    }
+
+    const tipLabel = { musteri:'Müşteri', tedarikci:'Tedarikçi', her_ikisi:'Her ikisi' };
+
+    tbody.innerHTML = rows.map(c=>{
+      const bakiye = Number(c.acilis_bakiye || 0);
+      const bakiyeClass = bakiye > 0 ? 'bakiye-pos' : (bakiye < 0 ? 'bakiye-neg' : '');
+      return `
+        <tr data-id="${c.id}">
+          <td class="kod-cell">${escapeHtml(c.kod)}</td>
+          <td>${escapeHtml(c.unvan)}</td>
+          <td><span class="tip-badge tip-${c.tip}">${tipLabel[c.tip] || c.tip}</span></td>
+          <td>${escapeHtml(c.yetkili_kisi || '—')}</td>
+          <td>${escapeHtml(c.telefon || '—')}</td>
+          <td class="${bakiyeClass}">${bakiye.toLocaleString('tr-TR', {minimumFractionDigits:2})} TL</td>
+        </tr>`;
+    }).join('');
+
+    tbody.querySelectorAll('tr[data-id]').forEach(tr=>{
+      tr.addEventListener('click', ()=> openEdit(tr.dataset.id));
+    });
+  }
+
+  function escapeHtml(str){
+    const div = document.createElement('div');
+    div.textContent = str ?? '';
+    return div.innerHTML;
+  }
+
+  document.getElementById('searchInput').addEventListener('input', renderTable);
+  document.getElementById('filterTip').addEventListener('change', renderTable);
+
+  // ---- Drawer aç/kapat ----
+  const overlay = document.getElementById('overlay');
+  const drawer = document.getElementById('drawer');
+  const form = document.getElementById('cariForm');
+  const drawerError = document.getElementById('drawerError');
+
+  function openDrawer(){
+    overlay.classList.add('show');
+    drawer.classList.add('show');
+  }
+  function closeDrawer(){
+    overlay.classList.remove('show');
+    drawer.classList.remove('show');
+    drawerError.classList.remove('show');
+    form.reset();
+    editingId = null;
+  }
+  overlay.addEventListener('click', closeDrawer);
+  document.getElementById('drawerClose').addEventListener('click', closeDrawer);
+  document.getElementById('cancelBtn').addEventListener('click', closeDrawer);
+
+  async function nextSuggestedKod(){
+    const { count } = await sb.from('cari').select('*', { count:'exact', head:true });
+    const n = (count || 0) + 1;
+    return 'CARI-' + String(n).padStart(4, '0');
+  }
+
+  document.getElementById('newCariBtn').addEventListener('click', async ()=>{
+    editingId = null;
+    document.getElementById('drawerTitle').textContent = 'Yeni Cari';
+    document.getElementById('drawerSub').textContent = 'Yeni bir müşteri veya tedarikçi kartı oluşturun.';
+    document.getElementById('deleteBtn').style.display = 'none';
+    document.getElementById('statementBox').style.display = 'none';
+    form.reset();
+    document.getElementById('kod').value = await nextSuggestedKod();
+    openDrawer();
+  });
+
+  function openEdit(id){
+    const c = allCari.find(x=>x.id === id);
+    if (!c) return;
+    editingId = id;
+    document.getElementById('drawerTitle').textContent = c.unvan;
+    document.getElementById('drawerSub').textContent = 'Kayıt bilgilerini düzenleyin.';
+    document.getElementById('kod').value = c.kod;
+    document.getElementById('tip').value = c.tip;
+    document.getElementById('unvan').value = c.unvan;
+    document.getElementById('yetkili_kisi').value = c.yetkili_kisi || '';
+    document.getElementById('telefon').value = c.telefon || '';
+    document.getElementById('adres').value = c.adres || '';
+    document.getElementById('vergi_dairesi').value = c.vergi_dairesi || '';
+    document.getElementById('vergi_no').value = c.vergi_no || '';
+    document.getElementById('acilis_bakiye').value = c.acilis_bakiye || 0;
+    document.getElementById('ozel_not').value = c.ozel_not || '';
+
+    const bakiye = Number(c.acilis_bakiye || 0);
+    const statementBox = document.getElementById('statementBox');
+    statementBox.style.display = 'block';
+    statementBox.innerHTML = `<b>Hesap Özeti</b><br>Açılış bakiyesi: <b>${bakiye.toLocaleString('tr-TR',{minimumFractionDigits:2})} TL</b><br>
+      Fatura ve tahsilat hareketleri, Satış ve Kasa modülleri eklendiğinde (Aşama 5-6) burada otomatik listelenecek.`;
+
+    document.getElementById('deleteBtn').style.display = 'block';
+    drawerError.classList.remove('show');
+    openDrawer();
+  }
+
+  // ---- Kaydet ----
+  form.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    drawerError.classList.remove('show');
+
+    const payload = {
+      kod: document.getElementById('kod').value.trim(),
+      tip: document.getElementById('tip').value,
+      unvan: document.getElementById('unvan').value.trim(),
+      yetkili_kisi: document.getElementById('yetkili_kisi').value.trim() || null,
+      telefon: document.getElementById('telefon').value.trim() || null,
+      adres: document.getElementById('adres').value.trim() || null,
+      vergi_dairesi: document.getElementById('vergi_dairesi').value.trim() || null,
+      vergi_no: document.getElementById('vergi_no').value.trim() || null,
+      acilis_bakiye: parseFloat(document.getElementById('acilis_bakiye').value) || 0,
+      ozel_not: document.getElementById('ozel_not').value.trim() || null,
+    };
+
+    let error;
+    if (editingId){
+      ({ error } = await sb.from('cari').update(payload).eq('id', editingId));
+    } else {
+      ({ error } = await sb.from('cari').insert(payload));
+    }
+
+    if (error){
+      if (error.message && error.message.includes('duplicate key')){
+        drawerError.textContent = 'Bu kod zaten kullanılıyor. Lütfen farklı bir kod girin.';
+      } else {
+        drawerError.textContent = 'Kaydedilemedi: ' + error.message;
+      }
+      drawerError.classList.add('show');
+      return;
+    }
+
+    closeDrawer();
+    loadCari();
+  });
+
+  // ---- Sil ----
+  document.getElementById('deleteBtn').addEventListener('click', async ()=>{
+    if (!editingId) return;
+    if (!confirm('Bu cari kaydını silmek istediğinize emin misiniz? Bu işlem geri alınamaz.')) return;
+
+    const { error } = await sb.from('cari').delete().eq('id', editingId);
+    if (error){
+      drawerError.textContent = 'Silinemedi: ' + error.message;
+      drawerError.classList.add('show');
+      return;
+    }
+    closeDrawer();
+    loadCari();
+  });
+</script>
+</body>
+</html>
