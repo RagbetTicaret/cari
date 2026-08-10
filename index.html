@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ragbet Ticaret — Giriş</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --ink:#1C1B19;
+    --panel:#24221F;
+    --cream:#F5F1E8;
+    --cream-dim:#E8E2D3;
+    --brass:#C97C2E;
+    --brass-dim:#9C611F;
+    --muted:#A39B8B;
+    --rust:#B5432E;
+    --mono:'JetBrains Mono', monospace;
+    --sans:'Inter', sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{
+    font-family:var(--sans);
+    display:flex;
+    min-height:100vh;
+    background:var(--cream);
+    color:var(--ink);
+  }
+  .brand{
+    flex:1 1 44%;
+    background:var(--ink);
+    color:var(--cream);
+    display:flex;
+    flex-direction:column;
+    justify-content:space-between;
+    padding:3rem 2.75rem;
+    position:relative;
+    overflow:hidden;
+    min-height:280px;
+  }
+  .brand-top{position:relative; z-index:2;}
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:.72rem;
+    letter-spacing:.18em;
+    text-transform:uppercase;
+    color:var(--brass);
+    margin-bottom:1.1rem;
+  }
+  .brand h1{
+    font-family:var(--mono);
+    font-weight:700;
+    font-size:clamp(2.1rem, 5vw, 3.1rem);
+    line-height:1.05;
+    letter-spacing:-.01em;
+  }
+  .brand p.tagline{
+    font-family:var(--mono);
+    font-size:.78rem;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--muted);
+    margin-top:.9rem;
+  }
+  .barcode{
+    display:flex;
+    align-items:flex-end;
+    gap:3px;
+    height:64px;
+    margin-top:2.4rem;
+    opacity:.85;
+  }
+  .barcode span{
+    display:block;
+    background:var(--brass);
+    width:3px;
+  }
+  .barcode span:nth-child(4n){background:var(--cream-dim); opacity:.5;}
+  .brand-foot{
+    position:relative; z-index:2;
+    font-family:var(--mono);
+    font-size:.7rem;
+    color:var(--muted);
+    letter-spacing:.06em;
+  }
+  .brand-foot b{color:var(--cream-dim); font-weight:500;}
+
+  .formside{
+    flex:1 1 56%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:2.5rem 1.75rem;
+  }
+  .form-wrap{width:100%; max-width:360px;}
+  .form-wrap h2{
+    font-size:1.5rem;
+    font-weight:600;
+    margin-bottom:.35rem;
+  }
+  .form-wrap .sub{
+    font-size:.88rem;
+    color:#6B655A;
+    margin-bottom:2rem;
+  }
+  label{
+    display:block;
+    font-size:.76rem;
+    font-weight:600;
+    letter-spacing:.03em;
+    text-transform:uppercase;
+    color:#6B655A;
+    margin-bottom:.4rem;
+  }
+  .field{margin-bottom:1.15rem;}
+  input[type=email], input[type=password]{
+    width:100%;
+    padding:.72rem .85rem;
+    border:1.5px solid #DAD2C0;
+    border-radius:6px;
+    background:#fff;
+    font-family:var(--sans);
+    font-size:.95rem;
+    color:var(--ink);
+    transition:border-color .15s ease, box-shadow .15s ease;
+  }
+  input:focus{
+    outline:none;
+    border-color:var(--brass);
+    box-shadow:0 0 0 3px rgba(201,124,46,.18);
+  }
+  button.submit{
+    width:100%;
+    padding:.8rem;
+    margin-top:.4rem;
+    background:var(--brass);
+    color:var(--ink);
+    border:none;
+    border-radius:6px;
+    font-family:var(--sans);
+    font-weight:600;
+    font-size:.95rem;
+    cursor:pointer;
+    transition:background .15s ease, transform .1s ease;
+  }
+  button.submit:hover{background:var(--brass-dim); color:var(--cream);}
+  button.submit:active{transform:scale(.99);}
+  button.submit:disabled{opacity:.6; cursor:not-allowed;}
+
+  .error{
+    display:none;
+    background:#FBEAE6;
+    border:1px solid rgba(181,67,46,.35);
+    color:var(--rust);
+    font-size:.84rem;
+    padding:.6rem .75rem;
+    border-radius:6px;
+    margin-bottom:1.1rem;
+  }
+  .error.show{display:block;}
+
+  .welcome{display:none; text-align:center;}
+  .welcome.show{display:block;}
+  .welcome .check{
+    width:52px; height:52px;
+    border-radius:50%;
+    background:var(--brass);
+    color:var(--ink);
+    display:flex; align-items:center; justify-content:center;
+    font-size:1.5rem; font-weight:700;
+    margin:0 auto 1.2rem;
+  }
+  .welcome h2{margin-bottom:.4rem;}
+  .welcome p{color:#6B655A; font-size:.9rem; line-height:1.55;}
+  .welcome .email{font-family:var(--mono); color:var(--ink); font-weight:500;}
+  .welcome .note{
+    margin-top:1.5rem;
+    padding:.85rem 1rem;
+    background:var(--cream-dim);
+    border-radius:6px;
+    font-size:.82rem;
+    color:#6B655A;
+    text-align:left;
+  }
+  .goto-cari{
+    display:block;
+    margin-top:1.4rem;
+    padding:.75rem 1rem;
+    background:var(--ink);
+    color:var(--cream);
+    text-decoration:none;
+    border-radius:6px;
+    font-weight:600;
+    font-size:.9rem;
+    transition:background .15s ease;
+  }
+  .goto-cari:hover{background:var(--brass-dim);}
+  button.logout{
+    margin-top:1.4rem;
+    background:none;
+    border:1.5px solid #DAD2C0;
+    color:#6B655A;
+    padding:.55rem 1rem;
+    border-radius:6px;
+    font-family:var(--sans);
+    font-size:.85rem;
+    cursor:pointer;
+  }
+  button.logout:hover{border-color:var(--brass); color:var(--brass-dim);}
+
+  @media (max-width: 760px){
+    body{flex-direction:column;}
+    .brand{min-height:200px; padding:2.2rem 1.75rem;}
+    .barcode{height:40px; margin-top:1.4rem;}
+    .formside{padding:2.5rem 1.5rem;}
+  }
+</style>
+</head>
+<body>
+
+  <div class="brand">
+    <div class="brand-top">
+      <div class="eyebrow">Cari · Stok · Satış Sistemi</div>
+      <h1>Ragbet<br>Ticaret</h1>
+      <p class="tagline">Yönetim Paneli</p>
+      <div class="barcode" id="barcode"></div>
+    </div>
+    <div class="brand-foot">Aşama 1 <b>— Altyapı</b> · v0.1</div>
+  </div>
+
+  <div class="formside">
+    <div class="form-wrap">
+
+      <form id="loginForm">
+        <h2>Giriş yap</h2>
+        <p class="sub">Hesap bilgilerinizle sisteme giriş yapın.</p>
+
+        <div class="error" id="errorBox"></div>
+
+        <div class="field">
+          <label for="email">E-posta</label>
+          <input type="email" id="email" required autocomplete="username">
+        </div>
+        <div class="field">
+          <label for="password">Şifre</label>
+          <input type="password" id="password" required autocomplete="current-password">
+        </div>
+
+        <button type="submit" class="submit" id="submitBtn">Giriş Yap</button>
+      </form>
+
+      <div class="welcome" id="welcomeBox">
+        <div class="check">✓</div>
+        <h2>Hoş geldiniz</h2>
+        <p>Giriş yapan hesap: <span class="email" id="welcomeEmail"></span></p>
+        <a href="cari.html" class="goto-cari">Cari Hesaplara Git →</a>
+        <div class="note">
+          Stok ve satış ekranları sonraki aşamalarda buraya eklenecek.
+        </div>
+        <button class="logout" id="logoutBtn">Çıkış yap</button>
+      </div>
+
+    </div>
+  </div>
+
+<script>
+  // Barkod deseni oluştur (sadece görsel imza)
+  const bc = document.getElementById('barcode');
+  const widths = [3,6,3,3,9,3,6,3,12,3,3,6,3,9,3,3,6,12,3,3,9,3,6,3,3,12,3,6,3,9,3,3];
+  widths.forEach(w=>{
+    const bar = document.createElement('span');
+    bar.style.width = w + 'px';
+    bar.style.height = (30 + Math.random()*34) + 'px';
+    bc.appendChild(bar);
+  });
+
+  // ---- Supabase bağlantısı ----
+  const SUPABASE_URL = "https://npdpsnhmmvwdnwxknrre.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5wZHBzbmhtbXZ3ZG53eGtucnJlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwNzc1NzgsImV4cCI6MjEwMTY1MzU3OH0.-YdM8RBnT2jSobwUQydQMs-eElZnkoLta6MjNqENSNY";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const form = document.getElementById('loginForm');
+  const errorBox = document.getElementById('errorBox');
+  const submitBtn = document.getElementById('submitBtn');
+  const welcomeBox = document.getElementById('welcomeBox');
+  const welcomeEmail = document.getElementById('welcomeEmail');
+  const logoutBtn = document.getElementById('logoutBtn');
+
+  function showError(msg){
+    errorBox.textContent = msg;
+    errorBox.classList.add('show');
+  }
+  function hideError(){
+    errorBox.classList.remove('show');
+  }
+
+  form.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    hideError();
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Giriş yapılıyor…';
+
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Giriş Yap';
+
+    if (error){
+      showError('Giriş başarısız: e-posta veya şifre hatalı olabilir.');
+      return;
+    }
+
+    form.style.display = 'none';
+    welcomeEmail.textContent = data.user.email;
+    welcomeBox.classList.add('show');
+  });
+
+  logoutBtn.addEventListener('click', async ()=>{
+    await sb.auth.signOut();
+    welcomeBox.classList.remove('show');
+    form.style.display = 'block';
+    form.reset();
+  });
+
+  // Sayfa açılışında zaten giriş yapılmış mı kontrol et
+  sb.auth.getSession().then(({data})=>{
+    if (data.session){
+      form.style.display = 'none';
+      welcomeEmail.textContent = data.session.user.email;
+      welcomeBox.classList.add('show');
+    }
+  });
+</script>
+</body>
+</html>
