@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ragbet Ticaret — Satış</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+<script src="yedek.js"></script>
+<style>
+  :root{
+    --ink:#1C1B19; --panel:#24221F; --cream:#F5F1E8; --cream-dim:#E8E2D3;
+    --brass:#C97C2E; --brass-dim:#9C611F; --muted:#A39B8B; --rust:#B5432E;
+    --green:#3F7D4E; --line:#DAD2C0; --mono:'JetBrains Mono', monospace; --sans:'Inter', sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{font-family:var(--sans); background:var(--cream); color:var(--ink); min-height:100vh;}
+
+  .topbar{background:var(--ink); color:var(--cream); display:flex; align-items:center; justify-content:space-between; padding:0 1.75rem; height:60px;}
+  .topbar .brand{font-family:var(--mono); font-weight:700; font-size:1.05rem;}
+  .topbar .brand small{font-weight:400; font-size:.7rem; color:var(--brass); letter-spacing:.1em; text-transform:uppercase; margin-left:.5rem;}
+  .topbar nav{display:flex; align-items:center; gap:1.5rem;}
+  .topbar nav a{color:var(--muted); text-decoration:none; font-size:.85rem; font-weight:500;}
+  .topbar nav a.active{color:var(--cream); border-bottom:2px solid var(--brass); padding-bottom:4px;}
+  .topbar .user{display:flex; align-items:center; gap:.9rem;}
+  .topbar .user span{font-size:.8rem; color:var(--muted); font-family:var(--mono);}
+  .topbar button.logout{background:none; border:1px solid #45423C; color:var(--cream-dim); padding:.4rem .8rem; border-radius:5px; font-size:.78rem; cursor:pointer;}
+
+  main{max-width:1180px; margin:0 auto; padding:1.8rem 1.5rem 4rem;}
+  h1{font-size:1.5rem; font-weight:600; margin-bottom:1.2rem;}
+
+  .layout{display:grid; grid-template-columns:1fr 340px; gap:1.5rem;}
+  @media (max-width:900px){ .layout{grid-template-columns:1fr;} }
+
+  .card{background:#fff; border:1px solid var(--line); border-radius:10px; padding:1.3rem;}
+  .card + .card{margin-top:1.2rem;}
+  .card h2{font-size:.95rem; font-weight:600; margin-bottom:.9rem;}
+
+  .search-row{display:flex; gap:.5rem; position:relative;}
+  .search-row input{flex:1; padding:.7rem .9rem; border:1.5px solid var(--line); border-radius:6px; font-size:.92rem;}
+  .search-row input:focus{outline:none; border-color:var(--brass);}
+  .scan-btn{background:var(--ink); color:var(--cream); border:none; border-radius:6px; padding:0 1rem; font-size:.95rem; cursor:pointer;}
+  .scan-btn:hover{background:var(--brass-dim);}
+
+  .suggest{
+    position:absolute; top:calc(100% + 4px); left:0; right:0; background:#fff;
+    border:1px solid var(--line); border-radius:8px; box-shadow:0 8px 20px rgba(0,0,0,.08);
+    max-height:260px; overflow-y:auto; z-index:15; display:none;
+  }
+  .suggest.show{display:block;}
+  .suggest .item{padding:.6rem .9rem; cursor:pointer; font-size:.87rem; display:flex; justify-content:space-between;}
+  .suggest .item:hover{background:var(--cream-dim);}
+  .suggest .item .ad{font-weight:500;}
+  .suggest .item .meta{color:#9A927F; font-size:.78rem; font-family:var(--mono);}
+
+  table{width:100%; border-collapse:collapse; margin-top:1rem;}
+  thead th{text-align:left; font-size:.7rem; text-transform:uppercase; color:#8A8272; padding:.5rem .4rem; border-bottom:1.5px solid var(--line);}
+  tbody td{padding:.5rem .4rem; font-size:.85rem; border-bottom:1px solid #F0EBDF; vertical-align:middle;}
+  tbody input{width:100%; padding:.35rem .4rem; border:1.5px solid var(--line); border-radius:5px; font-size:.85rem;}
+  tbody input:focus{outline:none; border-color:var(--brass);}
+  .sil-btn{background:none; border:none; color:var(--rust); cursor:pointer; font-size:1rem;}
+  .empty-cart{text-align:center; color:#9A927F; padding:2rem 1rem; font-size:.85rem;}
+
+  .field{margin-bottom:1rem;}
+  .field label{display:block; font-size:.72rem; font-weight:600; text-transform:uppercase; letter-spacing:.03em; color:#6B655A; margin-bottom:.35rem;}
+  .field select{width:100%; padding:.6rem .7rem; border:1.5px solid var(--line); border-radius:6px; font-size:.87rem; background:#fff;}
+  .field select:focus{outline:none; border-color:var(--brass);}
+
+  .totals{border-top:1.5px solid var(--line); margin-top:1rem; padding-top:1rem;}
+  .totals .row{display:flex; justify-content:space-between; font-size:.85rem; margin-bottom:.5rem; color:#5B5546;}
+  .totals .row.genel{font-size:1.15rem; font-weight:700; color:var(--ink); margin-top:.6rem;}
+
+  button.complete{width:100%; background:var(--brass); color:var(--ink); border:none; padding:.9rem; border-radius:8px; font-weight:700; font-size:1rem; cursor:pointer; margin-top:1.2rem;}
+  button.complete:hover{background:var(--brass-dim); color:var(--cream);}
+  button.complete:disabled{opacity:.5; cursor:not-allowed;}
+
+  .today-list{margin-top:0;}
+  .today-row{display:flex; justify-content:space-between; padding:.55rem 0; border-bottom:1px solid #F0EBDF; font-size:.83rem;}
+  .today-row:last-child{border-bottom:none;}
+  .today-row .belge{font-family:var(--mono); font-size:.76rem; color:#8A8272;}
+  .today-empty{color:#9A927F; font-size:.82rem; padding:.6rem 0;}
+
+  /* ---- kamera modal ---- */
+  .scanner-overlay{position:fixed; inset:0; background:rgba(0,0,0,.75); display:none; align-items:center; justify-content:center; z-index:60; flex-direction:column;}
+  .scanner-overlay.show{display:flex;}
+  .scanner-box{background:#fff; border-radius:12px; padding:1.2rem; width:min(360px, 90vw);}
+  .scanner-box h3{font-size:1rem; margin-bottom:.8rem; color:var(--ink);}
+  #reader{width:100%; border-radius:8px; overflow:hidden;}
+  .scanner-close{margin-top:1rem; width:100%; padding:.6rem; background:none; border:1.5px solid var(--line); border-radius:6px; color:#6B655A; cursor:pointer; font-size:.85rem;}
+
+  /* ---- hızlı ürün ekle modal ---- */
+  .modal-overlay{position:fixed; inset:0; background:rgba(28,27,25,.5); display:none; align-items:center; justify-content:center; z-index:60;}
+  .modal-overlay.show{display:flex;}
+  .modal-box{background:var(--cream); border-radius:12px; padding:1.6rem; width:min(380px, 90vw);}
+  .modal-box h3{font-size:1.05rem; margin-bottom:.3rem;}
+  .modal-box .msub{font-size:.82rem; color:#6B655A; margin-bottom:1.1rem;}
+  .modal-box .field input{width:100%; padding:.6rem .75rem; border:1.5px solid var(--line); border-radius:6px; font-size:.88rem;}
+  .modal-actions{display:flex; gap:.6rem; margin-top:1.1rem;}
+  .modal-actions button{flex:1; padding:.65rem; border-radius:6px; font-weight:600; font-size:.87rem; cursor:pointer;}
+  .modal-save{background:var(--brass); color:var(--ink); border:none;}
+  .modal-cancel{background:none; border:1.5px solid var(--line); color:#6B655A;}
+
+  /* ---- yazdırılabilir fatura ---- */
+  #invoiceSheet{display:none;}
+  @media print{
+    .no-print{display:none !important;}
+    #invoiceSheet{display:block !important;}
+    body{background:#fff;}
+    main{max-width:100%; padding:0;}
+  }
+  .inv-head{display:flex; justify-content:space-between; margin-bottom:1.5rem; padding-bottom:1rem; border-bottom:2px solid var(--ink);}
+  .inv-head h2{font-family:var(--mono); font-size:1.3rem;}
+  .inv-meta{font-size:.85rem; line-height:1.6;}
+  .inv-table{width:100%; border-collapse:collapse; margin:1rem 0;}
+  .inv-table th, .inv-table td{border:1px solid #ccc; padding:.5rem; font-size:.85rem; text-align:left;}
+  .inv-totals{margin-top:1rem; text-align:right; font-size:.9rem; line-height:1.8;}
+
+  #authGate{display:flex; align-items:center; justify-content:center; height:100vh; font-family:var(--mono); color:#8A8272; font-size:.85rem;}
+  .toast{position:fixed; bottom:1.5rem; right:1.5rem; background:var(--ink); color:var(--cream); padding:.8rem 1.1rem; border-radius:8px; font-size:.83rem; box-shadow:0 6px 20px rgba(0,0,0,.25); opacity:0; transform:translateY(10px); transition:opacity .2s ease, transform .2s ease; z-index:50; max-width:320px;}
+  .toast.show{opacity:1; transform:translateY(0);}
+</style>
+</head>
+<body>
+
+<div id="authGate">Kontrol ediliyor…</div>
+
+<div id="appRoot" style="display:none;">
+  <header class="topbar no-print">
+    <div class="brand">Ragbet Ticaret<small>Panel</small></div>
+    <nav>
+      <a href="cari.html">Cari Hesaplar</a>
+      <a href="stok.html">Stok</a>
+      <a href="satis.html" class="active">Satış</a>
+      <a href="yedekleme.html">Yedekleme</a>
+    </nav>
+    <div class="user">
+      <span id="userEmail"></span>
+      <button class="logout" id="logoutBtn">Çıkış</button>
+    </div>
+  </header>
+
+  <main>
+    <h1 class="no-print">Yeni Satış</h1>
+
+    <div class="layout no-print">
+      <!-- SOL: ürün arama + sepet -->
+      <div>
+        <div class="card">
+          <h2>Ürün Ekle</h2>
+          <div class="search-row">
+            <input type="text" id="urunAra" placeholder="Ürün adı, kod veya barkod yazın / okutun, Enter'a basın…" autocomplete="off">
+            <button type="button" class="scan-btn" id="scanBtn">📷</button>
+            <div class="suggest" id="suggestBox"></div>
+          </div>
+
+          <table>
+            <thead>
+              <tr><th>Ürün</th><th style="width:70px;">Miktar</th><th style="width:90px;">Fiyat</th><th style="width:70px;">İsk.%</th><th style="width:90px;">Tutar</th><th></th></tr>
+            </thead>
+            <tbody id="sepetBody">
+              <tr><td colspan="6" class="empty-cart">Sepet boş — ürün ekleyin</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card">
+          <h2>Bugünün Satışları</h2>
+          <div class="today-list" id="todayList"><div class="today-empty">Yükleniyor…</div></div>
+        </div>
+      </div>
+
+      <!-- SAĞ: özet + tamamla -->
+      <div>
+        <div class="card">
+          <h2>Satış Bilgileri</h2>
+          <div class="field">
+            <label for="cariSelect">Cari</label>
+            <select id="cariSelect"><option value="">Perakende (cari seçilmedi)</option></select>
+          </div>
+          <div class="field">
+            <label for="belgeTipi">Belge Tipi</label>
+            <select id="belgeTipi">
+              <option value="fis">Fiş</option>
+              <option value="fatura">Fatura</option>
+              <option value="irsaliye">İrsaliye</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="odemeTipi">Ödeme Tipi</label>
+            <select id="odemeTipi">
+              <option value="nakit">Nakit</option>
+              <option value="kart">Kart</option>
+              <option value="havale">Havale</option>
+              <option value="cek_senet">Çek/Senet</option>
+              <option value="cari">Cari Hesaba İşle (veresiye)</option>
+            </select>
+          </div>
+
+          <div class="totals">
+            <div class="row"><span>Ara Toplam</span><span id="araToplam">0,00 TL</span></div>
+            <div class="row"><span>KDV</span><span id="kdvToplam">0,00 TL</span></div>
+            <div class="row genel"><span>Genel Toplam</span><span id="genelToplam">0,00 TL</span></div>
+          </div>
+
+          <button class="complete" id="completeBtn" disabled>Satışı Tamamla</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- kamera -->
+<div class="scanner-overlay no-print" id="scannerOverlay">
+  <div class="scanner-box">
+    <h3>📷 Barkod / Karekod Okutun</h3>
+    <div id="reader"></div>
+    <button type="button" class="scanner-close" id="scannerCloseBtn">İptal</button>
+  </div>
+</div>
+
+<!-- hızlı ürün ekle -->
+<div class="modal-overlay no-print" id="quickAddOverlay">
+  <div class="modal-box">
+    <h3>Yeni Ürün</h3>
+    <p class="msub">Bu barkot kayıtlı değil. Hızlıca ekleyip satışa devam edin.</p>
+    <div class="field"><label>Ürün Adı</label><input type="text" id="qaAd"></div>
+    <div class="field"><label>Satış Fiyatı (TL)</label><input type="number" step="0.01" id="qaFiyat" value="0"></div>
+    <div class="modal-actions">
+      <button class="modal-cancel" id="qaCancel">Vazgeç</button>
+      <button class="modal-save" id="qaSave">Ekle ve Sepete At</button>
+    </div>
+  </div>
+</div>
+
+<div id="invoiceSheet"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+  const SUPABASE_URL = "https://npdpsnhmmvwdnwxknrre.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5wZHBzbmhtbXZ3ZG53eGtucnJlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwNzc1NzgsImV4cCI6MjEwMTY1MzU3OH0.-YdM8RBnT2jSobwUQydQMs-eElZnkoLta6MjNqENSNY";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  let allStok = [];
+  let allCari = [];
+  let sepet = [];
+  let subeId = null;
+  let currentUserId = null;
+  let pendingBarkod = null;
+
+  function showToast(msg){
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(()=> t.classList.remove('show'), 4500);
+  }
+  function escapeHtml(str){
+    const div = document.createElement('div');
+    div.textContent = str ?? '';
+    return div.innerHTML;
+  }
+  function tl(n){ return Number(n||0).toLocaleString('tr-TR', {minimumFractionDigits:2}) + ' TL'; }
+
+  sb.auth.getSession().then(async ({data})=>{
+    if (!data.session){ window.location.href = 'index.html'; return; }
+    currentUserId = data.session.user.id;
+    document.getElementById('userEmail').textContent = data.session.user.email;
+
+    const { data: subeData } = await sb.from('sube').select('id').limit(1).single();
+    subeId = subeData ? subeData.id : null;
+
+    document.getElementById('authGate').style.display = 'none';
+    document.getElementById('appRoot').style.display = 'block';
+
+    await Promise.all([loadStok(), loadCari(), loadToday()]);
+    otomatikYedekKontrol(sb, showToast);
+  });
+
+  document.getElementById('logoutBtn').addEventListener('click', async ()=>{
+    await sb.auth.signOut();
+    window.location.href = 'index.html';
+  });
+
+  async function loadStok(){
+    const { data } = await sb.from('stok').select('*, sube_stok(miktar, sube_id)');
+    allStok = (data || []).map(s=>{
+      const rec = (s.sube_stok || []).find(x => x.sube_id === subeId);
+      return { ...s, miktar: rec ? Number(rec.miktar) : 0 };
+    });
+  }
+
+  async function loadCari(){
+    const { data } = await sb.from('cari').select('*').order('unvan');
+    allCari = data || [];
+    const sel = document.getElementById('cariSelect');
+    sel.innerHTML = '<option value="">Perakende (cari seçilmedi)</option>' +
+      allCari.map(c => `<option value="${c.id}">${escapeHtml(c.kod)} — ${escapeHtml(c.unvan)}</option>`).join('');
+  }
+
+  async function loadToday(){
+    const bugun = new Date().toISOString().slice(0,10);
+    const { data } = await sb.from('satis')
+      .select('*, cari(unvan)')
+      .gte('tarih', bugun + 'T00:00:00')
+      .order('tarih', { ascending:false });
+    const box = document.getElementById('todayList');
+    if (!data || data.length === 0){
+      box.innerHTML = '<div class="today-empty">Bugün henüz satış yapılmadı.</div>';
+      return;
+    }
+    box.innerHTML = data.map(s=>`
+      <div class="today-row">
+        <span><span class="belge">${escapeHtml(s.belge_no)}</span> — ${s.cari ? escapeHtml(s.cari.unvan) : 'Perakende'}</span>
+        <span>${tl(s.genel_toplam)}</span>
+      </div>`).join('');
+  }
+
+  // ---- Ürün arama / öneri ----
+  const urunAra = document.getElementById('urunAra');
+  const suggestBox = document.getElementById('suggestBox');
+
+  urunAra.addEventListener('input', ()=>{
+    const q = urunAra.value.trim().toLowerCase();
+    if (!q){ suggestBox.classList.remove('show'); return; }
+    const matches = allStok.filter(s =>
+      s.ad.toLowerCase().includes(q) || s.kod.toLowerCase().includes(q) || (s.barkod||'').toLowerCase().includes(q)
+    ).slice(0, 8);
+    if (matches.length === 0){ suggestBox.classList.remove('show'); return; }
+    suggestBox.innerHTML = matches.map(s=>`
+      <div class="item" data-id="${s.id}">
+        <span class="ad">${escapeHtml(s.ad)}</span>
+        <span class="meta">${escapeHtml(s.kod)} · ${s.miktar} ${escapeHtml(s.birim)}</span>
+      </div>`).join('');
+    suggestBox.classList.add('show');
+    suggestBox.querySelectorAll('.item').forEach(el=>{
+      el.addEventListener('click', ()=>{
+        addToSepet(el.dataset.id);
+        urunAra.value = '';
+        suggestBox.classList.remove('show');
+        urunAra.focus();
+      });
+    });
+  });
+
+  urunAra.addEventListener('keydown', (e)=>{
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const q = urunAra.value.trim();
+    if (!q) return;
+    const exact = allStok.find(s => s.barkod === q || s.kod.toLowerCase() === q.toLowerCase());
+    if (exact){
+      addToSepet(exact.id);
+      urunAra.value = '';
+      suggestBox.classList.remove('show');
+    } else {
+      const kismi = allStok.filter(s => s.ad.toLowerCase().includes(q.toLowerCase()));
+      if (kismi.length === 1){
+        addToSepet(kismi[0].id);
+        urunAra.value = '';
+        suggestBox.classList.remove('show');
+      } else {
+        showToast('Eşleşen tek bir ürün yok. Listeden seçin veya barkod okutun.');
+      }
+    }
+  });
+
+  document.addEventListener('click', (e)=>{
+    if (!e.target.closest('.search-row')) suggestBox.classList.remove('show');
+  });
+
+  function addToSepet(stokId){
+    const s = allStok.find(x => x.id === stokId);
+    if (!s) return;
+    const mevcut = sepet.find(k => k.stok_id === stokId);
+    if (mevcut){
+      mevcut.miktar += 1;
+    } else {
+      sepet.push({
+        stok_id: s.id, ad: s.ad, birim: s.birim,
+        miktar: 1, birim_fiyat: Number(s.satis_fiyati),
+        kdv_orani: Number(s.kdv_orani), iskonto_yuzde: 0
+      });
+    }
+    renderSepet();
+  }
+
+  function renderSepet(){
+    const body = document.getElementById('sepetBody');
+    if (sepet.length === 0){
+      body.innerHTML = '<tr><td colspan="6" class="empty-cart">Sepet boş — ürün ekleyin</td></tr>';
+      document.getElementById('completeBtn').disabled = true;
+      updateTotals();
+      return;
+    }
+    body.innerHTML = sepet.map((k, i)=>`
+      <tr>
+        <td>${escapeHtml(k.ad)}</td>
+        <td><input type="number" step="0.01" value="${k.miktar}" data-i="${i}" data-f="miktar"></td>
+        <td><input type="number" step="0.01" value="${k.birim_fiyat}" data-i="${i}" data-f="birim_fiyat"></td>
+        <td><input type="number" step="0.01" value="${k.iskonto_yuzde}" data-i="${i}" data-f="iskonto_yuzde"></td>
+        <td>${tl(satirTutar(k))}</td>
+        <td><button type="button" class="sil-btn" data-i="${i}">✕</button></td>
+      </tr>`).join('');
+
+    body.querySelectorAll('input').forEach(inp=>{
+      inp.addEventListener('input', ()=>{
+        const i = Number(inp.dataset.i), f = inp.dataset.f;
+        sepet[i][f] = parseFloat(inp.value) || 0;
+        renderSepet();
+      });
+    });
+    body.querySelectorAll('.sil-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        sepet.splice(Number(btn.dataset.i), 1);
+        renderSepet();
+      });
+    });
+
+    document.getElementById('completeBtn').disabled = false;
+    updateTotals();
+  }
+
+  function satirTutar(k){
+    return k.miktar * k.birim_fiyat * (1 - (k.iskonto_yuzde||0)/100);
+  }
+
+  function updateTotals(){
+    let ara = 0, kdv = 0;
+    sepet.forEach(k=>{
+      const t = satirTutar(k);
+      ara += t;
+      kdv += t * (k.kdv_orani||0) / 100;
+    });
+    document.getElementById('araToplam').textContent = tl(ara);
+    document.getElementById('kdvToplam').textContent = tl(kdv);
+    document.getElementById('genelToplam').textContent = tl(ara + kdv);
+  }
+
+  // ---- Kamera ----
+  let html5QrCode = null;
+  function openScanner(onScan){
+    document.getElementById('scannerOverlay').classList.add('show');
+    html5QrCode = new Html5Qrcode("reader");
+    html5QrCode.start(
+      { facingMode: "environment" }, { fps: 10, qrbox: 240 },
+      (decodedText)=>{ closeScanner(); onScan(decodedText); },
+      ()=>{}
+    ).catch(err=>{ showToast('Kamera açılamadı: ' + err); closeScanner(); });
+  }
+  function closeScanner(){
+    document.getElementById('scannerOverlay').classList.remove('show');
+    if (html5QrCode){ html5QrCode.stop().then(()=> html5QrCode.clear()).catch(()=>{}); html5QrCode = null; }
+  }
+  document.getElementById('scannerCloseBtn').addEventListener('click', closeScanner);
+
+  document.getElementById('scanBtn').addEventListener('click', ()=>{
+    openScanner((code)=>{
+      const found = allStok.find(s => s.barkod === code || s.kod === code);
+      if (found){
+        addToSepet(found.id);
+        showToast(found.ad + ' sepete eklendi.');
+      } else {
+        pendingBarkod = code;
+        document.getElementById('qaAd').value = '';
+        document.getElementById('qaFiyat').value = '0';
+        document.getElementById('quickAddOverlay').classList.add('show');
+      }
+    });
+  });
+
+  // ---- Hızlı ürün ekle ----
+  document.getElementById('qaCancel').addEventListener('click', ()=>{
+    document.getElementById('quickAddOverlay').classList.remove('show');
+    pendingBarkod = null;
+  });
+  document.getElementById('qaSave').addEventListener('click', async ()=>{
+    const ad = document.getElementById('qaAd').value.trim();
+    const fiyat = parseFloat(document.getElementById('qaFiyat').value) || 0;
+    if (!ad){ showToast('Ürün adı gerekli.'); return; }
+
+    const { count } = await sb.from('stok').select('*', { count:'exact', head:true });
+    const kod = 'STK-' + String((count||0)+1).padStart(4,'0');
+
+    const { data, error } = await sb.from('stok').insert({
+      kod, barkod: pendingBarkod, ad, birim:'Adet', kdv_orani:20, satis_fiyati:fiyat, alis_fiyati:0
+    }).select().single();
+
+    if (error){ showToast('Eklenemedi: ' + error.message); return; }
+
+    allStok.push({ ...data, miktar:0 });
+    addToSepet(data.id);
+    document.getElementById('quickAddOverlay').classList.remove('show');
+    pendingBarkod = null;
+    showToast(ad + ' eklendi ve sepete atıldı.');
+  });
+
+  // ---- Satışı tamamla ----
+  document.getElementById('completeBtn').addEventListener('click', async ()=>{
+    if (sepet.length === 0) return;
+    const btn = document.getElementById('completeBtn');
+    btn.disabled = true;
+    btn.textContent = 'Kaydediliyor…';
+
+    const kalemler = sepet.map(k => ({
+      stok_id: k.stok_id, miktar: k.miktar, birim_fiyat: k.birim_fiyat,
+      kdv_orani: k.kdv_orani, iskonto_yuzde: k.iskonto_yuzde
+    }));
+    const cariId = document.getElementById('cariSelect').value || null;
+    const belgeTipi = document.getElementById('belgeTipi').value;
+    const odemeTipi = document.getElementById('odemeTipi').value;
+
+    const { data, error } = await sb.rpc('create_satis', {
+      p_sube_id: subeId, p_cari_id: cariId, p_kullanici_id: currentUserId,
+      p_belge_tipi: belgeTipi, p_odeme_tipi: odemeTipi, p_kalemler: kalemler
+    });
+
+    btn.disabled = false;
+    btn.textContent = 'Satışı Tamamla';
+
+    if (error){
+      showToast('Satış kaydedilemedi: ' + error.message);
+      return;
+    }
+
+    const { data: satisData } = await sb.from('satis').select('*, cari(unvan, adres, vergi_no)').eq('id', data).single();
+    printInvoice(satisData, sepet);
+
+    sepet = [];
+    renderSepet();
+    await Promise.all([loadStok(), loadToday()]);
+    showToast('Satış tamamlandı: ' + satisData.belge_no);
+  });
+
+  function printInvoice(satisData, kalemler){
+    const cariAdi = satisData.cari ? satisData.cari.unvan : 'Perakende Müşteri';
+    const tarih = new Date(satisData.tarih).toLocaleString('tr-TR');
+    document.getElementById('invoiceSheet').innerHTML = `
+      <div class="inv-head">
+        <div>
+          <h2>Ragbet Ticaret</h2>
+          <div class="inv-meta">Hırdavat · Makine · Teçhizat</div>
+        </div>
+        <div class="inv-meta" style="text-align:right;">
+          <b>${satisData.belge_tipi.toUpperCase()}</b><br>
+          Belge No: ${escapeHtml(satisData.belge_no)}<br>
+          Tarih: ${tarih}
+        </div>
+      </div>
+      <div class="inv-meta"><b>Müşteri:</b> ${escapeHtml(cariAdi)}</div>
+      <table class="inv-table">
+        <thead><tr><th>Ürün</th><th>Miktar</th><th>Birim Fiyat</th><th>İsk.%</th><th>Tutar</th></tr></thead>
+        <tbody>
+          ${kalemler.map(k=>`<tr><td>${escapeHtml(k.ad)}</td><td>${k.miktar} ${escapeHtml(k.birim)}</td><td>${tl(k.birim_fiyat)}</td><td>${k.iskonto_yuzde}%</td><td>${tl(satirTutar(k))}</td></tr>`).join('')}
+        </tbody>
+      </table>
+      <div class="inv-totals">
+        Ara Toplam: ${tl(satisData.ara_toplam)}<br>
+        KDV: ${tl(satisData.kdv_toplam)}<br>
+        <b style="font-size:1.1rem;">Genel Toplam: ${tl(satisData.genel_toplam)}</b>
+      </div>`;
+    setTimeout(()=> window.print(), 300);
+  }
+</script>
+</body>
+</html>

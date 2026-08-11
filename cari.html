@@ -201,7 +201,7 @@
     <nav>
       <a href="cari.html" class="active">Cari Hesaplar</a>
       <a href="stok.html">Stok</a>
-      <a href="#" style="opacity:.4; cursor:default;">Satış (yakında)</a>
+      <a href="satis.html">Satış</a>
       <a href="yedekleme.html">Yedekleme</a>
     </nav>
     <div class="user">
@@ -348,7 +348,7 @@
   // ---- Giriş kontrolü ----
   sb.auth.getSession().then(async ({data})=>{
     if (!data.session){
-      window.location.href = 'login.html';
+      window.location.href = 'index.html';
       return;
     }
     document.getElementById('userEmail').textContent = data.session.user.email;
@@ -360,7 +360,7 @@
 
   document.getElementById('logoutBtn').addEventListener('click', async ()=>{
     await sb.auth.signOut();
-    window.location.href = 'login.html';
+    window.location.href = 'index.html';
   });
 
   // ---- Cari listesini yükle ----
